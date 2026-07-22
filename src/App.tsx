@@ -4,6 +4,7 @@ import { useData } from "./data/DataContext.tsx";
 import { Config } from "./features/config/Config.tsx";
 import { Dashboard } from "./features/dashboard/Dashboard.tsx";
 import { History } from "./features/history/History.tsx";
+import { InstallBanner } from "./pwa/InstallBanner.tsx";
 
 type Tab = "dashboard" | "history" | "config";
 
@@ -39,6 +40,8 @@ export function App() {
           </button>
         ))}
       </nav>
+
+      <InstallBanner />
 
       {error && <div className="card gate__error">Erreur de synchronisation : {error}</div>}
 

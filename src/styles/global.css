@@ -317,6 +317,30 @@ textarea.input {
   box-shadow: 0 8px 24px rgb(37 99 235 / 35%);
 }
 
+/* ---- install banner ----------------------------------------------------- */
+
+.install {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 10px 12px;
+  margin-bottom: 12px;
+}
+
+.install__icon {
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.install__text {
+  flex: 1;
+  font-size: 0.9rem;
+}
+
 /* ---- gate --------------------------------------------------------------- */
 
 .gate {
