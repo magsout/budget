@@ -1,0 +1,15 @@
+rules_version = '2';
+
+// Family budget — a single shared account owns all data.
+// Paste these rules in Firebase console > Firestore Database > Rules, replacing
+// SHARED_UID with the UID of the account you created under Authentication > Users.
+// This blocks anyone who self-registers a different account (the public config
+// alone grants no data access).
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if request.auth != null
+        && request.auth.uid == "SHARED_UID";
+    }
+  }
+}

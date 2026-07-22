@@ -1,0 +1,17 @@
+node_modules
+dist
+coverage
+playwright-report
+test-results
+*.tsbuildinfo
+
+# Local env (never commit real Firebase config / secrets)
+.env
+.env.local
+.env.*.local
+
+# Editor / OS / tooling
+.DS_Store
+*.log
+.gstack/
+.claude/
