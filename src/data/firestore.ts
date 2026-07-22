@@ -114,6 +114,17 @@ export async function addExpense(input: NewExpenseInput): Promise<void> {
   });
 }
 
+/** Update the editable fields of an expense (keeps createdAt / deletedAt). */
+export async function updateExpense(id: string, input: NewExpenseInput): Promise<void> {
+  await updateDoc(doc(expensesCol, id), {
+    categoryId: input.categoryId,
+    userId: input.userId,
+    amountCents: input.amountCents,
+    description: input.description?.trim() ? input.description.trim() : null,
+    date: input.date,
+  });
+}
+
 export async function softDeleteExpense(id: string): Promise<void> {
   await updateDoc(doc(expensesCol, id), { deletedAt: nowIso() });
 }

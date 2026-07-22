@@ -1,10 +1,14 @@
 import { useMemo, useState } from "react";
-import { softDeleteExpense } from "../../data/firestore.ts";
 import { expensesForMonth, monthSummary, totalRemaining } from "../../lib/budget.ts";
 import { currentMonth, formatDate, formatMonth } from "../../lib/dates.ts";
 import { formatCents } from "../../lib/money.ts";
-import type { Dataset } from "../../lib/types.ts";
+import type { Dataset, Expense } from "../../lib/types.ts";
 import { ExpenseForm } from "../expense/ExpenseForm.tsx";
+
+type FormState =
+  | { mode: "create"; categoryId?: string }
+  | { mode: "edit"; expense: Expense }
+  | null;
 
 function remainingClass(remaining: number, starting: number): string {
   if (remaining < 0) return "negative";
@@ -14,8 +18,7 @@ function remainingClass(remaining: number, starting: number): string {
 
 export function Dashboard({ dataset }: { dataset: Dataset }) {
   const month = currentMonth();
-  const [showForm, setShowForm] = useState(false);
-  const [prefillCategory, setPrefillCategory] = useState<string | undefined>();
+  const [form, setForm] = useState<FormState>(null);
 
   const summary = useMemo(() => monthSummary(dataset, month), [dataset, month]);
   const total = useMemo(() => totalRemaining(dataset, month), [dataset, month]);
@@ -23,11 +26,6 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
 
   const categoryName = (id: string) => dataset.categories.find((c) => c.id === id)?.name ?? "—";
   const userName = (id: string) => dataset.users.find((u) => u.id === id)?.firstName ?? "—";
-
-  const openForm = (categoryId?: string) => {
-    setPrefillCategory(categoryId);
-    setShowForm(true);
-  };
 
   return (
     <div>
@@ -66,7 +64,7 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
               type="button"
               key={category.id}
               className="card poste"
-              onClick={() => openForm(category.id)}
+              onClick={() => setForm({ mode: "create", categoryId: category.id })}
               style={{ textAlign: "inherit", width: "100%", font: "inherit", color: "inherit" }}
             >
               <div className="poste__head">
@@ -99,7 +97,12 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
         <div className="card">
           <h3>Dépenses du mois</h3>
           {expenses.map((e) => (
-            <div className="list-item" key={e.id}>
+            <button
+              type="button"
+              key={e.id}
+              className="list-item list-item--btn"
+              onClick={() => setForm({ mode: "edit", expense: e })}
+            >
               <div>
                 <div>
                   <strong>{formatCents(e.amountCents)}</strong> · {categoryName(e.categoryId)}
@@ -109,28 +112,24 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
                   {e.description ? ` · ${e.description}` : ""}
                 </div>
               </div>
-              <button
-                type="button"
-                className="btn btn--ghost btn--sm btn--danger"
-                onClick={() => softDeleteExpense(e.id)}
-                aria-label="Supprimer la dépense"
-              >
-                Suppr.
-              </button>
-            </div>
+              <span className="muted" aria-hidden="true">
+                ✏️
+              </span>
+            </button>
           ))}
         </div>
       )}
 
-      <button type="button" className="fab" onClick={() => openForm()}>
+      <button type="button" className="fab" onClick={() => setForm({ mode: "create" })}>
         + Ajouter une dépense
       </button>
 
-      {showForm && (
+      {form && (
         <ExpenseForm
           dataset={dataset}
-          defaultCategoryId={prefillCategory}
-          onClose={() => setShowForm(false)}
+          onClose={() => setForm(null)}
+          defaultCategoryId={form.mode === "create" ? form.categoryId : undefined}
+          expense={form.mode === "edit" ? form.expense : undefined}
         />
       )}
     </div>

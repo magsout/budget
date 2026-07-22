@@ -439,6 +439,24 @@ textarea.input {
   border-bottom: none;
 }
 
+.list-item--btn {
+  width: 100%;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border);
+  color: inherit;
+  font: inherit;
+  text-align: inherit;
+}
+
+.list-item--btn:last-child {
+  border-bottom: none;
+}
+
+.list-item--btn:hover {
+  background: var(--surface-2);
+}
+
 .muted {
   color: var(--text-muted);
   font-size: 0.85rem;
