@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useData } from "./data/DataContext.tsx";
+import { Account } from "./features/account/Account.tsx";
 import { Config } from "./features/config/Config.tsx";
 import { Dashboard } from "./features/dashboard/Dashboard.tsx";
 import { History } from "./features/history/History.tsx";
@@ -7,11 +8,12 @@ import { AccountMenu } from "./features/menu/AccountMenu.tsx";
 import { InstallBanner } from "./pwa/InstallBanner.tsx";
 import { PullToRefresh } from "./pwa/PullToRefresh.tsx";
 
-type Tab = "dashboard" | "history";
+type Tab = "dashboard" | "history" | "account";
 
 const TABS: { id: Tab; label: string }[] = [
   { id: "dashboard", label: "Budget" },
   { id: "history", label: "Historique" },
+  { id: "account", label: "Compte" },
 ];
 
 export function App() {
@@ -83,8 +85,10 @@ export function App() {
               <div className="card empty">Chargement des données…</div>
             ) : tab === "dashboard" ? (
               <Dashboard dataset={dataset} />
-            ) : (
+            ) : tab === "history" ? (
               <History dataset={dataset} />
+            ) : (
+              <Account dataset={dataset} />
             )}
           </>
         )}

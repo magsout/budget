@@ -16,9 +16,16 @@ export const usersCol = collection(db, "users");
 export const categoriesCol = collection(db, "categories");
 export const budgetVersionsCol = collection(db, "budgetVersions");
 export const expensesCol = collection(db, "expenses");
+export const recurringExpensesCol = collection(db, "recurringExpenses");
+export const incomesCol = collection(db, "incomes");
 
 function nowIso(): string {
   return new Date().toISOString();
+}
+
+/** Normalise an optional month input: blank/undefined → null (open-ended). */
+function monthOrNull(m: MonthKey | null | undefined): MonthKey | null {
+  return m && m.trim() ? m.trim() : null;
 }
 
 /* ---- users -------------------------------------------------------------- */
@@ -127,4 +134,54 @@ export async function updateExpense(id: string, input: NewExpenseInput): Promise
 
 export async function softDeleteExpense(id: string): Promise<void> {
   await updateDoc(doc(expensesCol, id), { deletedAt: nowIso() });
+}
+
+/* ---- cashflow: recurring expenses & incomes ----------------------------- */
+
+/** Shared input for both recurring expenses and incomes (identical shapes). */
+export interface NewCashflowInput {
+  name: string;
+  amountCents: number;
+  description?: string | null;
+  startMonth?: MonthKey | null;
+  endMonth?: MonthKey | null;
+}
+
+/** Editable fields common to a recurring expense / income doc. */
+function cashflowFields(input: NewCashflowInput) {
+  return {
+    name: input.name.trim(),
+    amountCents: input.amountCents,
+    description: input.description?.trim() ? input.description.trim() : null,
+    startMonth: monthOrNull(input.startMonth),
+    endMonth: monthOrNull(input.endMonth),
+  };
+}
+
+export async function addRecurringExpense(input: NewCashflowInput): Promise<void> {
+  await addDoc(recurringExpensesCol, {
+    ...cashflowFields(input),
+    createdAt: nowIso(),
+    deletedAt: null,
+  });
+}
+
+export async function updateRecurringExpense(id: string, input: NewCashflowInput): Promise<void> {
+  await updateDoc(doc(recurringExpensesCol, id), cashflowFields(input));
+}
+
+export async function softDeleteRecurringExpense(id: string): Promise<void> {
+  await updateDoc(doc(recurringExpensesCol, id), { deletedAt: nowIso() });
+}
+
+export async function addIncome(input: NewCashflowInput): Promise<void> {
+  await addDoc(incomesCol, { ...cashflowFields(input), createdAt: nowIso(), deletedAt: null });
+}
+
+export async function updateIncome(id: string, input: NewCashflowInput): Promise<void> {
+  await updateDoc(doc(incomesCol, id), cashflowFields(input));
+}
+
+export async function softDeleteIncome(id: string): Promise<void> {
+  await updateDoc(doc(incomesCol, id), { deletedAt: nowIso() });
 }

@@ -701,6 +701,39 @@ textarea.input {
   color: var(--negative);
 }
 
+/* ---- month navigator & cashflow (Compte tab) ---------------------------- */
+
+.month-nav {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.month-nav__label {
+  flex: 1;
+  text-align: center;
+  font-weight: 700;
+  font-size: 1.05rem;
+}
+
+.month-nav__btn {
+  flex: none;
+  min-width: 44px;
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.cashflow-totals {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 10px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
 .user-choices {
   display: flex;
   flex-direction: column;

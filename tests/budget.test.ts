@@ -44,7 +44,15 @@ function exp(
 }
 
 function dataset(over: Partial<Dataset> = {}): Dataset {
-  return { users: [], categories: [], budgetVersions: [], expenses: [], ...over };
+  return {
+    users: [],
+    categories: [],
+    budgetVersions: [],
+    expenses: [],
+    recurringExpenses: [],
+    incomes: [],
+    ...over,
+  };
 }
 
 describe("budgetVersionFor (SCD-2 lookup)", () => {

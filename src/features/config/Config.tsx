@@ -1,19 +1,26 @@
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useId, useState } from "react";
 import { ColorSwatchPicker } from "../../components/ColorSwatchPicker.tsx";
 import { useData } from "../../data/DataContext.tsx";
 import {
   addCategory,
+  addIncome,
+  addRecurringExpense,
   addUser,
   changeCategoryBudget,
+  type NewCashflowInput,
   setCategoryArchived,
+  softDeleteIncome,
+  softDeleteRecurringExpense,
   updateCategory,
+  updateIncome,
+  updateRecurringExpense,
 } from "../../data/firestore.ts";
 import { budgetVersionFor } from "../../lib/budget.ts";
 import { DEFAULT_CATEGORY_COLOR } from "../../lib/colors.ts";
 import { currentMonth, formatMonth } from "../../lib/dates.ts";
 import { centsToInput, eurosToCents, isValidPositiveAmount } from "../../lib/money.ts";
 import { formatCents } from "../../lib/money.ts";
-import type { Category, Dataset } from "../../lib/types.ts";
+import type { Category, Dataset, Income, RecurringExpense } from "../../lib/types.ts";
 
 /** Route a terminal write failure to the shared error banner. Offline writes never
  * reject here — Firestore queues them — so this fires only on genuine errors. */
@@ -25,6 +32,26 @@ export function Config({ dataset }: { dataset: Dataset }) {
   return (
     <div>
       <CategoriesSection dataset={dataset} />
+      <CashflowSection
+        title="Dépenses mensuelles"
+        errorContext="dépense mensuelle"
+        namePlaceholder="Ex : Loyer"
+        amountPlaceholder="1200"
+        items={dataset.recurringExpenses}
+        add={addRecurringExpense}
+        update={updateRecurringExpense}
+        softDelete={softDeleteRecurringExpense}
+      />
+      <CashflowSection
+        title="Revenus"
+        errorContext="revenu"
+        namePlaceholder="Ex : Salaire"
+        amountPlaceholder="2500"
+        items={dataset.incomes}
+        add={addIncome}
+        update={updateIncome}
+        softDelete={softDeleteIncome}
+      />
       <UsersSection dataset={dataset} />
       <p className="muted" style={{ textAlign: "center", marginTop: 8 }}>
         Modifier un montant s'applique à partir du mois courant ({formatMonth(currentMonth())}) ;
@@ -189,6 +216,290 @@ function CategoryRow({ category, dataset }: { category: Category; dataset: Datas
           <strong>{category.name}</strong>
         </div>
         <div className="muted">{formatCents(currentAmount)} / mois</div>
+      </div>
+      <button type="button" className="btn btn--ghost btn--sm" onClick={() => setEditing(true)}>
+        Modifier
+      </button>
+    </div>
+  );
+}
+
+/* ---- cashflow: recurring expenses & incomes ----------------------------- */
+
+type CashflowItem = RecurringExpense | Income;
+
+interface CashflowSectionProps {
+  title: string;
+  errorContext: string;
+  namePlaceholder: string;
+  amountPlaceholder: string;
+  items: CashflowItem[];
+  add: (input: NewCashflowInput) => Promise<void>;
+  update: (id: string, input: NewCashflowInput) => Promise<void>;
+  softDelete: (id: string) => Promise<void>;
+}
+
+/** Manage a recurring-monthly list (expenses OR incomes — identical shapes). */
+function CashflowSection({
+  title,
+  errorContext,
+  namePlaceholder,
+  amountPlaceholder,
+  items,
+  add,
+  update,
+  softDelete,
+}: CashflowSectionProps) {
+  const { notifyError } = useData();
+  const uid = useId();
+  const [name, setName] = useState("");
+  const [amount, setAmount] = useState("");
+  const [description, setDescription] = useState("");
+  const [startMonth, setStartMonth] = useState("");
+  const [endMonth, setEndMonth] = useState("");
+
+  const list = items
+    .filter((it) => !it.deletedAt)
+    .toSorted((a, b) => b.amountCents - a.amountCents || a.name.localeCompare(b.name));
+
+  const rangeInvalid = startMonth !== "" && endMonth !== "" && startMonth > endMonth;
+  const canAdd = name.trim().length > 0 && isValidPositiveAmount(amount) && !rangeInvalid;
+
+  const onAdd = (e: FormEvent) => {
+    e.preventDefault();
+    if (!canAdd) return;
+    add({
+      name,
+      amountCents: eurosToCents(amount),
+      description: description || null,
+      startMonth: startMonth || null,
+      endMonth: endMonth || null,
+    }).catch((err: unknown) => notifyError(syncErrorMessage(errorContext, err)));
+    setName("");
+    setAmount("");
+    setDescription("");
+    setStartMonth("");
+    setEndMonth("");
+  };
+
+  return (
+    <div className="card">
+      <h3>{title}</h3>
+      {list.length === 0 && <p className="muted">Rien pour l'instant.</p>}
+      {list.map((it) => (
+        <CashflowRow
+          key={it.id}
+          item={it}
+          errorContext={errorContext}
+          update={update}
+          softDelete={softDelete}
+        />
+      ))}
+
+      <form onSubmit={onAdd} style={{ marginTop: 12 }}>
+        <div className="row">
+          <div className="field" style={{ flex: 2 }}>
+            <label className="field__label" htmlFor={`${uid}-name`}>
+              Nom
+            </label>
+            <input
+              id={`${uid}-name`}
+              className="input"
+              placeholder={namePlaceholder}
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor={`${uid}-amount`}>
+              Montant (€)
+            </label>
+            <input
+              id={`${uid}-amount`}
+              className="input"
+              inputMode="decimal"
+              placeholder={amountPlaceholder}
+              value={amount}
+              onChange={(e) => setAmount(e.target.value)}
+            />
+          </div>
+        </div>
+        <div className="field">
+          <label className="field__label" htmlFor={`${uid}-desc`}>
+            Description (optionnel)
+          </label>
+          <input
+            id={`${uid}-desc`}
+            className="input"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+          />
+        </div>
+        <div className="row">
+          <div className="field">
+            <label className="field__label" htmlFor={`${uid}-start`}>
+              Début (optionnel)
+            </label>
+            <input
+              id={`${uid}-start`}
+              type="month"
+              className="input"
+              value={startMonth}
+              onChange={(e) => setStartMonth(e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor={`${uid}-end`}>
+              Fin (optionnel)
+            </label>
+            <input
+              id={`${uid}-end`}
+              type="month"
+              className="input"
+              value={endMonth}
+              onChange={(e) => setEndMonth(e.target.value)}
+            />
+          </div>
+        </div>
+        {rangeInvalid && <p className="muted negative">La fin doit être après le début.</p>}
+        <button type="submit" className="btn btn--primary btn--block" disabled={!canAdd}>
+          Ajouter
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function CashflowRow({
+  item,
+  errorContext,
+  update,
+  softDelete,
+}: {
+  item: CashflowItem;
+  errorContext: string;
+  update: (id: string, input: NewCashflowInput) => Promise<void>;
+  softDelete: (id: string) => Promise<void>;
+}) {
+  const { notifyError } = useData();
+  const uid = useId();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(item.name);
+  const [amount, setAmount] = useState(centsToInput(item.amountCents));
+  const [description, setDescription] = useState(item.description ?? "");
+  const [startMonth, setStartMonth] = useState(item.startMonth ?? "");
+  const [endMonth, setEndMonth] = useState(item.endMonth ?? "");
+
+  const rangeInvalid = startMonth !== "" && endMonth !== "" && startMonth > endMonth;
+  const canSave = name.trim().length > 0 && isValidPositiveAmount(amount) && !rangeInvalid;
+
+  const save = () => {
+    if (!canSave) return;
+    update(item.id, {
+      name,
+      amountCents: eurosToCents(amount),
+      description: description || null,
+      startMonth: startMonth || null,
+      endMonth: endMonth || null,
+    }).catch((err: unknown) => notifyError(syncErrorMessage(errorContext, err)));
+    setEditing(false);
+  };
+
+  const remove = () => {
+    if (!confirm(`Supprimer « ${item.name} » ?`)) return;
+    softDelete(item.id).catch((err: unknown) => notifyError(syncErrorMessage("suppression", err)));
+  };
+
+  if (editing) {
+    return (
+      <div className="list-item" style={{ flexWrap: "wrap" }}>
+        <div className="row" style={{ width: "100%" }}>
+          <input
+            className="input"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            aria-label="Nom"
+          />
+          <input
+            className="input"
+            inputMode="decimal"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            aria-label="Montant"
+          />
+        </div>
+        <div style={{ width: "100%", marginTop: 8 }}>
+          <input
+            className="input"
+            placeholder="Description (optionnel)"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            aria-label="Description"
+          />
+        </div>
+        <div className="row" style={{ width: "100%", marginTop: 8 }}>
+          <div className="field">
+            <label className="field__label" htmlFor={`${uid}-start`}>
+              Début
+            </label>
+            <input
+              id={`${uid}-start`}
+              type="month"
+              className="input"
+              value={startMonth}
+              onChange={(e) => setStartMonth(e.target.value)}
+            />
+          </div>
+          <div className="field">
+            <label className="field__label" htmlFor={`${uid}-end`}>
+              Fin
+            </label>
+            <input
+              id={`${uid}-end`}
+              type="month"
+              className="input"
+              value={endMonth}
+              onChange={(e) => setEndMonth(e.target.value)}
+            />
+          </div>
+        </div>
+        {rangeInvalid && (
+          <p className="muted negative" style={{ width: "100%" }}>
+            La fin doit être après le début.
+          </p>
+        )}
+        <div className="row" style={{ width: "100%", marginTop: 8 }}>
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            onClick={save}
+            disabled={!canSave}
+          >
+            Enregistrer
+          </button>
+          <button type="button" className="btn btn--sm" onClick={() => setEditing(false)}>
+            Annuler
+          </button>
+          <button type="button" className="btn btn--sm btn--danger" onClick={remove}>
+            Supprimer
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="list-item">
+      <div>
+        <strong>{item.name}</strong>
+        <div className="muted">
+          {formatCents(item.amountCents)} / mois
+          {item.startMonth || item.endMonth
+            ? ` · ${item.startMonth ? formatMonth(item.startMonth) : "…"} → ${
+                item.endMonth ? formatMonth(item.endMonth) : "…"
+              }`
+            : ""}
+        </div>
       </div>
       <button type="button" className="btn btn--ghost btn--sm" onClick={() => setEditing(true)}>
         Modifier

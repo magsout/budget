@@ -43,10 +43,41 @@ export interface Expense {
   deletedAt: string | null; // soft delete
 }
 
+/**
+ * A recurring monthly expense shown in the Compte (cashflow) tab — a template,
+ * not a ledger entry. It contributes its full amount to every month within its
+ * [startMonth, endMonth] window (both inclusive; null = open-ended). Stopping a
+ * charge going forward = set endMonth; deletedAt only hides a mistaken entry.
+ */
+export interface RecurringExpense {
+  id: string;
+  name: string;
+  amountCents: number;
+  description: string | null;
+  startMonth: MonthKey | null; // "YYYY-MM" inclusive; null = no lower bound
+  endMonth: MonthKey | null; // "YYYY-MM" inclusive; null = no upper bound
+  createdAt: string; // ISO timestamp
+  deletedAt: string | null; // soft delete
+}
+
+/** A recurring monthly income (revenu). Same shape/semantics as RecurringExpense. */
+export interface Income {
+  id: string;
+  name: string;
+  amountCents: number;
+  description: string | null;
+  startMonth: MonthKey | null;
+  endMonth: MonthKey | null;
+  createdAt: string;
+  deletedAt: string | null;
+}
+
 /** The full app dataset loaded into memory (tiny at household scale). */
 export interface Dataset {
   users: User[];
   categories: Category[];
   budgetVersions: BudgetVersion[];
   expenses: Expense[];
+  recurringExpenses: RecurringExpense[];
+  incomes: Income[];
 }
