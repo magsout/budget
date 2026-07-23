@@ -591,7 +591,7 @@ textarea.input {
   flex: 1;
 }
 
-/* ---- topbar actions & current-user switch ------------------------------- */
+/* ---- topbar actions & account menu -------------------------------------- */
 
 .topbar__actions {
   display: flex;
@@ -599,11 +599,106 @@ textarea.input {
   gap: 8px;
 }
 
-.select--inline {
-  width: auto;
-  padding: 6px 10px;
-  font-size: 0.9rem;
+/* Sub-page header (Réglages): back button · centered title · balancing spacer. */
+.topbar--sub {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+}
+
+.topbar--sub .btn {
+  justify-self: start;
+}
+
+.topbar--sub .topbar__title {
+  text-align: center;
+}
+
+/* Trigger pill in the top-right; its label is the current household member. */
+.account-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 60vw;
+  padding: 4px 10px 4px 4px;
+  border: 1px solid var(--border);
   border-radius: 999px;
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-weight: 600;
+}
+
+.account-trigger:hover {
+  background: var(--surface-2);
+}
+
+.account-trigger__avatar,
+.account-menu__avatar {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  /* Overridden per-user via an inline style; this is the "no profile" fallback. */
+  background: var(--primary);
+  color: var(--primary-contrast);
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.account-menu__row-main {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.account-trigger__name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-trigger__caret {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.account-menu__section {
+  display: flex;
+  flex-direction: column;
+}
+
+.account-menu__section + .account-menu__section {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
+.account-menu__label {
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+  margin-bottom: 2px;
+}
+
+.account-menu__section .list-item--btn {
+  padding: 12px 4px;
+  cursor: pointer;
+}
+
+.account-menu__section .list-item--btn.is-active {
+  color: var(--primary);
+  font-weight: 700;
+}
+
+.account-menu__danger {
+  color: var(--negative);
 }
 
 .user-choices {

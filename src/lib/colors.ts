@@ -23,3 +23,17 @@ export const DEFAULT_CATEGORY_COLOR: string = CATEGORY_COLORS[0];
 export function isHexColor(value: unknown): value is string {
   return typeof value === "string" && /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.test(value);
 }
+
+/**
+ * Pick a stable avatar color for a seed (a user id). Deterministic — the same
+ * person always gets the same hue — so there's no stored field to migrate,
+ * mirroring how avatar services derive a color from an identity. Reuses the
+ * curated palette above; every color is dark enough for white initials.
+ */
+export function avatarColorFor(seed: string): string {
+  let hash = 0;
+  for (let i = 0; i < seed.length; i++) {
+    hash = (hash * 31 + seed.charCodeAt(i)) | 0;
+  }
+  return CATEGORY_COLORS[Math.abs(hash) % CATEGORY_COLORS.length];
+}
