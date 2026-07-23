@@ -1,4 +1,5 @@
 import { type FormEvent, useState } from "react";
+import { ColorSwatchPicker } from "../../components/ColorSwatchPicker.tsx";
 import {
   addCategory,
   addUser,
@@ -7,6 +8,7 @@ import {
   updateCategory,
 } from "../../data/firestore.ts";
 import { budgetVersionFor } from "../../lib/budget.ts";
+import { DEFAULT_CATEGORY_COLOR } from "../../lib/colors.ts";
 import { currentMonth, formatMonth } from "../../lib/dates.ts";
 import { centsToInput, eurosToCents, isValidPositiveAmount } from "../../lib/money.ts";
 import { formatCents } from "../../lib/money.ts";
@@ -30,6 +32,7 @@ export function Config({ dataset }: { dataset: Dataset }) {
 function CategoriesSection({ dataset }: { dataset: Dataset }) {
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
+  const [color, setColor] = useState(DEFAULT_CATEGORY_COLOR);
   const [busy, setBusy] = useState(false);
 
   const active = dataset.categories
@@ -43,9 +46,10 @@ function CategoriesSection({ dataset }: { dataset: Dataset }) {
     if (!canAdd) return;
     setBusy(true);
     try {
-      await addCategory({ name, amountCents: eurosToCents(amount) });
+      await addCategory({ name, amountCents: eurosToCents(amount), color });
       setName("");
       setAmount("");
+      setColor(DEFAULT_CATEGORY_COLOR);
     } finally {
       setBusy(false);
     }
@@ -87,6 +91,10 @@ function CategoriesSection({ dataset }: { dataset: Dataset }) {
             />
           </div>
         </div>
+        <div className="field">
+          <span className="field__label">Couleur</span>
+          <ColorSwatchPicker value={color} onChange={setColor} label="Couleur du poste" />
+        </div>
         <button type="submit" className="btn btn--primary btn--block" disabled={!canAdd}>
           Ajouter le poste
         </button>
@@ -101,13 +109,17 @@ function CategoryRow({ category, dataset }: { category: Category; dataset: Datas
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(category.name);
   const [amount, setAmount] = useState(centsToInput(currentAmount));
+  const [color, setColor] = useState(category.color ?? DEFAULT_CATEGORY_COLOR);
   const [busy, setBusy] = useState(false);
 
   const save = async () => {
     if (!isValidPositiveAmount(amount) || name.trim().length === 0) return;
     setBusy(true);
     try {
-      if (name.trim() !== category.name) await updateCategory(category.id, { name: name.trim() });
+      const patch: { name?: string; color?: string } = {};
+      if (name.trim() !== category.name) patch.name = name.trim();
+      if (color !== (category.color ?? null)) patch.color = color;
+      if (Object.keys(patch).length > 0) await updateCategory(category.id, patch);
       const cents = eurosToCents(amount);
       if (cents !== currentAmount) await changeCategoryBudget(category.id, cents, month);
       setEditing(false);
@@ -142,6 +154,9 @@ function CategoryRow({ category, dataset }: { category: Category; dataset: Datas
             aria-label="Montant"
           />
         </div>
+        <div style={{ width: "100%", marginTop: 8 }}>
+          <ColorSwatchPicker value={color} onChange={setColor} label="Couleur du poste" />
+        </div>
         <div className="row" style={{ width: "100%", marginTop: 8 }}>
           <button type="button" className="btn btn--primary btn--sm" onClick={save} disabled={busy}>
             Enregistrer
@@ -170,7 +185,11 @@ function CategoryRow({ category, dataset }: { category: Category; dataset: Datas
   return (
     <div className="list-item">
       <div>
-        <div>
+        <div className="poste__name">
+          <span
+            className="poste__dot"
+            style={category.color ? { background: category.color } : undefined}
+          />
           <strong>{category.name}</strong>
         </div>
         <div className="muted">{formatCents(currentAmount)} / mois</div>

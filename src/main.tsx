@@ -4,6 +4,8 @@ import { App } from "./App.tsx";
 import { AuthGate } from "./auth/AuthGate.tsx";
 import { AuthProvider } from "./auth/AuthContext.tsx";
 import { DataProvider } from "./data/DataContext.tsx";
+import { CurrentUserProvider } from "./user/CurrentUserContext.tsx";
+import { CurrentUserGate } from "./user/CurrentUserGate.tsx";
 import "./styles/global.css";
 
 const root = document.getElementById("root");
@@ -14,7 +16,11 @@ createRoot(root).render(
     <AuthProvider>
       <AuthGate>
         <DataProvider>
-          <App />
+          <CurrentUserProvider>
+            <CurrentUserGate>
+              <App />
+            </CurrentUserGate>
+          </CurrentUserProvider>
         </DataProvider>
       </AuthGate>
     </AuthProvider>
