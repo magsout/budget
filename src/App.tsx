@@ -6,6 +6,7 @@ import { Dashboard } from "./features/dashboard/Dashboard.tsx";
 import { History } from "./features/history/History.tsx";
 import { InstallBanner } from "./pwa/InstallBanner.tsx";
 import { PullToRefresh } from "./pwa/PullToRefresh.tsx";
+import { useCurrentUser } from "./user/CurrentUserContext.tsx";
 
 type Tab = "dashboard" | "history" | "config";
 
@@ -19,15 +20,33 @@ export function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const { signOut } = useAuth();
   const { dataset, loading, error } = useData();
+  const { currentUserId, setCurrentUser } = useCurrentUser();
 
   return (
     <PullToRefresh>
       <div className="app">
         <div className="topbar">
           <span className="topbar__title">Budget</span>
-          <button type="button" className="btn btn--ghost btn--sm" onClick={() => signOut()}>
-            Déconnexion
-          </button>
+          <div className="topbar__actions">
+            {dataset.users.length > 0 && (
+              <select
+                className="select select--inline"
+                value={currentUserId ?? ""}
+                onChange={(e) => setCurrentUser(e.target.value)}
+                aria-label="Utilisateur connecté"
+              >
+                {currentUserId === null && <option value="">Qui es-tu ?</option>}
+                {dataset.users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.firstName}
+                  </option>
+                ))}
+              </select>
+            )}
+            <button type="button" className="btn btn--ghost btn--sm" onClick={() => signOut()}>
+              Déconnexion
+            </button>
+          </div>
         </div>
 
         <nav className="tabs">

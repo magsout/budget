@@ -5,8 +5,7 @@ import { categoriesActiveIn } from "../../lib/budget.ts";
 import { currentMonth, localToday } from "../../lib/dates.ts";
 import { centsToInput, eurosToCents, isValidPositiveAmount } from "../../lib/money.ts";
 import type { Dataset, Expense } from "../../lib/types.ts";
-
-const LAST_USER_KEY = "budget:lastUserId";
+import { useCurrentUser } from "../../user/CurrentUserContext.tsx";
 
 interface Props {
   dataset: Dataset;
@@ -32,7 +31,7 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
     return list;
   }, [dataset, expense]);
 
-  const lastUser = localStorage.getItem(LAST_USER_KEY) ?? "";
+  const { currentUserId } = useCurrentUser();
 
   const [amount, setAmount] = useState(expense ? centsToInput(expense.amountCents) : "");
   const [categoryId, setCategoryId] = useState(
@@ -40,12 +39,16 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
   );
   const [userId, setUserId] = useState(
     expense?.userId ??
-      (dataset.users.some((u) => u.id === lastUser) ? lastUser : (dataset.users[0]?.id ?? "")),
+      (currentUserId && dataset.users.some((u) => u.id === currentUserId)
+        ? currentUserId
+        : (dataset.users[0]?.id ?? "")),
   );
   const [description, setDescription] = useState(expense?.description ?? "");
   const [date, setDate] = useState(expense?.date ?? localToday());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const selectedColor = categories.find((c) => c.id === categoryId)?.color;
 
   const canSubmit =
     isValidPositiveAmount(amount) &&
@@ -72,7 +75,6 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
       } else {
         await addExpense(payload);
       }
-      localStorage.setItem(LAST_USER_KEY, userId);
       onClose();
     } catch {
       setError("Enregistrement impossible. Vérifie ta connexion.");
@@ -123,18 +125,24 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
             <label className="field__label" htmlFor="category">
               Poste
             </label>
-            <select
-              id="category"
-              className="select"
-              value={categoryId}
-              onChange={(e) => setCategoryId(e.target.value)}
-            >
-              {categories.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            <div className="select-with-dot">
+              <span
+                className="poste__dot"
+                style={selectedColor ? { background: selectedColor } : undefined}
+              />
+              <select
+                id="category"
+                className="select"
+                value={categoryId}
+                onChange={(e) => setCategoryId(e.target.value)}
+              >
+                {categories.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </div>
           </div>
 
           <div className="row">

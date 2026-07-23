@@ -521,3 +521,69 @@ textarea.input {
   color: var(--primary-contrast);
   border-color: transparent;
 }
+
+/* ---- color swatch picker ------------------------------------------------ */
+
+.swatches {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  box-shadow: 0 0 0 1px var(--border);
+  cursor: pointer;
+  padding: 0;
+  flex: none;
+}
+
+.swatch--selected {
+  border-color: var(--surface);
+  box-shadow: 0 0 0 2px var(--text);
+}
+
+.swatch:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+/* Poste select prefixed by its color dot. */
+.select-with-dot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.select-with-dot .poste__dot {
+  width: 14px;
+  height: 14px;
+}
+
+.select-with-dot .select {
+  flex: 1;
+}
+
+/* ---- topbar actions & current-user switch ------------------------------- */
+
+.topbar__actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.select--inline {
+  width: auto;
+  padding: 6px 10px;
+  font-size: 0.9rem;
+  border-radius: 999px;
+}
+
+.user-choices {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
