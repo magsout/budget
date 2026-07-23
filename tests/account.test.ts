@@ -6,7 +6,13 @@ import {
   incomesActiveIn,
   recurringExpensesActiveIn,
 } from "../src/lib/account.ts";
-import type { BudgetVersion, Category, Dataset, Income, RecurringExpense } from "../src/lib/types.ts";
+import type {
+  BudgetVersion,
+  Category,
+  Dataset,
+  Income,
+  RecurringExpense,
+} from "../src/lib/types.ts";
 
 function rx(
   name: string,
