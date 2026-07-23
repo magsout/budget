@@ -19,14 +19,29 @@ const TABS: { id: Tab; label: string }[] = [
 export function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
   const { signOut } = useAuth();
-  const { dataset, loading, error } = useData();
+  const { dataset, loading, error, syncing, pendingWrites } = useData();
   const { currentUserId, setCurrentUser } = useCurrentUser();
+
+  // Discreet indicator: data shown from cache (offline / not yet confirmed) or
+  // local writes still being pushed to the server.
+  const showSync = syncing || pendingWrites;
+  const syncLabel = pendingWrites ? "Synchronisation…" : "Mise à jour…";
 
   return (
     <PullToRefresh>
       <div className="app">
         <div className="topbar">
-          <span className="topbar__title">Budget</span>
+          <span className="topbar__brand">
+            <span className="topbar__title">Budget</span>
+            {showSync && (
+              <span
+                className="topbar__sync"
+                role="status"
+                aria-label={syncLabel}
+                title={syncLabel}
+              />
+            )}
+          </span>
           <div className="topbar__actions">
             {dataset.users.length > 0 && (
               <select

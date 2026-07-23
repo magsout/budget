@@ -1,5 +1,6 @@
 import { type FormEvent, useState } from "react";
 import { ColorSwatchPicker } from "../../components/ColorSwatchPicker.tsx";
+import { useData } from "../../data/DataContext.tsx";
 import {
   addCategory,
   addUser,
@@ -13,6 +14,12 @@ import { currentMonth, formatMonth } from "../../lib/dates.ts";
 import { centsToInput, eurosToCents, isValidPositiveAmount } from "../../lib/money.ts";
 import { formatCents } from "../../lib/money.ts";
 import type { Category, Dataset } from "../../lib/types.ts";
+
+/** Route a terminal write failure to the shared error banner. Offline writes never
+ * reject here — Firestore queues them — so this fires only on genuine errors. */
+function syncErrorMessage(context: string, err: unknown): string {
+  return `Échec de synchronisation (${context}) : ${err instanceof Error ? err.message : String(err)}`;
+}
 
 export function Config({ dataset }: { dataset: Dataset }) {
   return (
@@ -30,29 +37,28 @@ export function Config({ dataset }: { dataset: Dataset }) {
 /* ---- categories --------------------------------------------------------- */
 
 function CategoriesSection({ dataset }: { dataset: Dataset }) {
+  const { notifyError } = useData();
   const [name, setName] = useState("");
   const [amount, setAmount] = useState("");
   const [color, setColor] = useState(DEFAULT_CATEGORY_COLOR);
-  const [busy, setBusy] = useState(false);
 
   const active = dataset.categories
     .filter((c) => !c.archivedAt)
     .toSorted((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 
-  const canAdd = name.trim().length > 0 && isValidPositiveAmount(amount) && !busy;
+  const canAdd = name.trim().length > 0 && isValidPositiveAmount(amount);
 
-  const onAdd = async (e: FormEvent) => {
+  // Optimistic: queue the write and reset the form immediately; the listener
+  // re-renders the new poste from the local cache and syncs in the background.
+  const onAdd = (e: FormEvent) => {
     e.preventDefault();
     if (!canAdd) return;
-    setBusy(true);
-    try {
-      await addCategory({ name, amountCents: eurosToCents(amount), color });
-      setName("");
-      setAmount("");
-      setColor(DEFAULT_CATEGORY_COLOR);
-    } finally {
-      setBusy(false);
-    }
+    addCategory({ name, amountCents: eurosToCents(amount), color }).catch((err: unknown) =>
+      notifyError(syncErrorMessage("poste", err)),
+    );
+    setName("");
+    setAmount("");
+    setColor(DEFAULT_CATEGORY_COLOR);
   };
 
   return (
@@ -104,35 +110,35 @@ function CategoriesSection({ dataset }: { dataset: Dataset }) {
 }
 
 function CategoryRow({ category, dataset }: { category: Category; dataset: Dataset }) {
+  const { notifyError } = useData();
   const month = currentMonth();
   const currentAmount = budgetVersionFor(dataset.budgetVersions, category.id, month);
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(category.name);
   const [amount, setAmount] = useState(centsToInput(currentAmount));
   const [color, setColor] = useState(category.color ?? DEFAULT_CATEGORY_COLOR);
-  const [busy, setBusy] = useState(false);
 
-  const save = async () => {
+  // Optimistic: queue the writes and close the editor immediately.
+  const save = () => {
     if (!isValidPositiveAmount(amount) || name.trim().length === 0) return;
-    setBusy(true);
-    try {
-      const patch: { name?: string; color?: string } = {};
-      if (name.trim() !== category.name) patch.name = name.trim();
-      if (color !== (category.color ?? null)) patch.color = color;
-      if (Object.keys(patch).length > 0) await updateCategory(category.id, patch);
-      const cents = eurosToCents(amount);
-      if (cents !== currentAmount) await changeCategoryBudget(category.id, cents, month);
-      setEditing(false);
-    } finally {
-      setBusy(false);
-    }
+    const patch: { name?: string; color?: string } = {};
+    if (name.trim() !== category.name) patch.name = name.trim();
+    if (color !== (category.color ?? null)) patch.color = color;
+    const ops: Promise<void>[] = [];
+    if (Object.keys(patch).length > 0) ops.push(updateCategory(category.id, patch));
+    const cents = eurosToCents(amount);
+    if (cents !== currentAmount) ops.push(changeCategoryBudget(category.id, cents, month));
+    Promise.all(ops).catch((err: unknown) => notifyError(syncErrorMessage("poste", err)));
+    setEditing(false);
   };
 
-  const archive = async () => {
+  const archive = () => {
     if (
       confirm(`Archiver le poste « ${category.name} » ? Il n'apparaîtra plus à partir de ce mois.`)
     ) {
-      await setCategoryArchived(category.id, true);
+      setCategoryArchived(category.id, true).catch((err: unknown) =>
+        notifyError(syncErrorMessage("archivage", err)),
+      );
     }
   };
 
@@ -158,23 +164,13 @@ function CategoryRow({ category, dataset }: { category: Category; dataset: Datas
           <ColorSwatchPicker value={color} onChange={setColor} label="Couleur du poste" />
         </div>
         <div className="row" style={{ width: "100%", marginTop: 8 }}>
-          <button type="button" className="btn btn--primary btn--sm" onClick={save} disabled={busy}>
+          <button type="button" className="btn btn--primary btn--sm" onClick={save}>
             Enregistrer
           </button>
-          <button
-            type="button"
-            className="btn btn--sm"
-            onClick={() => setEditing(false)}
-            disabled={busy}
-          >
+          <button type="button" className="btn btn--sm" onClick={() => setEditing(false)}>
             Annuler
           </button>
-          <button
-            type="button"
-            className="btn btn--sm btn--danger"
-            onClick={archive}
-            disabled={busy}
-          >
+          <button type="button" className="btn btn--sm btn--danger" onClick={archive}>
             Archiver
           </button>
         </div>
@@ -204,19 +200,14 @@ function CategoryRow({ category, dataset }: { category: Category; dataset: Datas
 /* ---- users -------------------------------------------------------------- */
 
 function UsersSection({ dataset }: { dataset: Dataset }) {
+  const { notifyError } = useData();
   const [firstName, setFirstName] = useState("");
-  const [busy, setBusy] = useState(false);
 
-  const onAdd = async (e: FormEvent) => {
+  const onAdd = (e: FormEvent) => {
     e.preventDefault();
-    if (firstName.trim().length === 0 || busy) return;
-    setBusy(true);
-    try {
-      await addUser(firstName);
-      setFirstName("");
-    } finally {
-      setBusy(false);
-    }
+    if (firstName.trim().length === 0) return;
+    addUser(firstName).catch((err: unknown) => notifyError(syncErrorMessage("utilisateur", err)));
+    setFirstName("");
   };
 
   return (
@@ -241,11 +232,7 @@ function UsersSection({ dataset }: { dataset: Dataset }) {
           onChange={(e) => setFirstName(e.target.value)}
           aria-label="Prénom"
         />
-        <button
-          type="submit"
-          className="btn btn--primary"
-          disabled={firstName.trim().length === 0 || busy}
-        >
+        <button type="submit" className="btn btn--primary" disabled={firstName.trim().length === 0}>
           Ajouter
         </button>
       </form>

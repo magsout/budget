@@ -1,5 +1,6 @@
 import { type FormEvent, useMemo, useState } from "react";
 import { Modal } from "../../components/Modal.tsx";
+import { useData } from "../../data/DataContext.tsx";
 import { addExpense, softDeleteExpense, updateExpense } from "../../data/firestore.ts";
 import { categoriesActiveIn } from "../../lib/budget.ts";
 import { currentMonth, localToday } from "../../lib/dates.ts";
@@ -18,6 +19,7 @@ interface Props {
 
 export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Props) {
   const editing = expense !== undefined;
+  const { notifyError } = useData();
 
   const categories = useMemo(() => {
     const list = categoriesActiveIn(dataset, currentMonth()).toSorted(
@@ -46,7 +48,6 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
   const [description, setDescription] = useState(expense?.description ?? "");
   const [date, setDate] = useState(expense?.date ?? localToday());
   const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
 
   const selectedColor = categories.find((c) => c.id === categoryId)?.color;
 
@@ -57,11 +58,13 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
     date !== "" &&
     !submitting;
 
-  const onSubmit = async (e: FormEvent) => {
+  // Optimistic / offline-first: fire the write and close immediately. Firestore
+  // applies it to the local cache right away (the listener re-renders the change)
+  // and queues it for background sync — awaiting the server ack would hang offline.
+  const onSubmit = (e: FormEvent) => {
     e.preventDefault();
     if (!canSubmit) return;
     setSubmitting(true);
-    setError(null);
     const payload = {
       categoryId,
       userId,
@@ -69,30 +72,25 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
       description: description || null,
       date,
     };
-    try {
-      if (editing) {
-        await updateExpense(expense.id, payload);
-      } else {
-        await addExpense(payload);
-      }
-      onClose();
-    } catch {
-      setError("Enregistrement impossible. Vérifie ta connexion.");
-      setSubmitting(false);
-    }
+    const op = editing ? updateExpense(expense.id, payload) : addExpense(payload);
+    op.catch((err: unknown) =>
+      notifyError(
+        `Échec de synchronisation de la dépense : ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
+    onClose();
   };
 
-  const onDelete = async () => {
+  const onDelete = () => {
     if (!expense) return;
     if (!confirm("Supprimer cette dépense ?")) return;
     setSubmitting(true);
-    try {
-      await softDeleteExpense(expense.id);
-      onClose();
-    } catch {
-      setError("Suppression impossible. Vérifie ta connexion.");
-      setSubmitting(false);
-    }
+    softDeleteExpense(expense.id).catch((err: unknown) =>
+      notifyError(
+        `Échec de synchronisation de la suppression : ${err instanceof Error ? err.message : String(err)}`,
+      ),
+    );
+    onClose();
   };
 
   const needsSetup = categories.length === 0 || dataset.users.length === 0;
@@ -189,8 +187,6 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
               onChange={(e) => setDescription(e.target.value)}
             />
           </div>
-
-          {error && <p className="gate__error">{error}</p>}
 
           <button type="submit" className="btn btn--primary btn--block" disabled={!canSubmit}>
             {submitting ? "Enregistrement…" : editing ? "Enregistrer" : "Ajouter la dépense"}

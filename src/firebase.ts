@@ -1,6 +1,11 @@
 import { type FirebaseApp, initializeApp } from "firebase/app";
 import { type Auth, browserLocalPersistence, getAuth, setPersistence } from "firebase/auth";
-import { type Firestore, getFirestore } from "firebase/firestore";
+import {
+  type Firestore,
+  initializeFirestore,
+  persistentLocalCache,
+  persistentMultipleTabManager,
+} from "firebase/firestore";
 
 /**
  * Firebase config. These values are PUBLIC by design (they only identify the
@@ -26,7 +31,12 @@ export const isFirebaseConfigured: boolean = Boolean(
 
 export const app: FirebaseApp = initializeApp(firebaseConfig);
 export const auth: Auth = getAuth(app);
-export const db: Firestore = getFirestore(app);
+// Offline-first: reads and writes go through a durable IndexedDB cache. onSnapshot
+// serves cached data instantly (even offline), writes queue locally and sync in the
+// background on reconnect. persistentMultipleTabManager shares the cache across tabs.
+export const db: Firestore = initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }),
+});
 
 // Keep the session across reloads/tabs so the password is typed only once.
 void setPersistence(auth, browserLocalPersistence);
