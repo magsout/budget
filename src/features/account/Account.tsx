@@ -1,5 +1,11 @@
 import { useMemo, useState } from "react";
-import { accountSummary, incomesActiveIn, recurringExpensesActiveIn } from "../../lib/account.ts";
+import {
+  accountSummary,
+  type CategoryBudgetLine,
+  categoryBudgetsActiveIn,
+  incomesActiveIn,
+  recurringExpensesActiveIn,
+} from "../../lib/account.ts";
 import { currentMonth, formatMonth, nextMonth, prevMonth } from "../../lib/dates.ts";
 import { formatCents } from "../../lib/money.ts";
 import type { Dataset, Income, RecurringExpense } from "../../lib/types.ts";
@@ -14,10 +20,9 @@ export function Account({ dataset }: { dataset: Dataset }) {
 
   const incomes = useMemo(() => incomesActiveIn(dataset, month), [dataset, month]);
   const expenses = useMemo(() => recurringExpensesActiveIn(dataset, month), [dataset, month]);
-  const { incomeCents, expenseCents, remainingCents } = useMemo(
-    () => accountSummary(dataset, month),
-    [dataset, month],
-  );
+  const budgets = useMemo(() => categoryBudgetsActiveIn(dataset, month), [dataset, month]);
+  const { incomeCents, expenseCents, remainingCents, budgetCents, remainingAfterBudgetsCents } =
+    useMemo(() => accountSummary(dataset, month), [dataset, month]);
 
   return (
     <div>
@@ -49,6 +54,14 @@ export function Account({ dataset }: { dataset: Dataset }) {
               {formatCents(remainingCents)}
             </div>
           </div>
+          <div style={{ textAlign: "right" }}>
+            <div className="summary__label">Reste après budgets</div>
+            <div
+              className={`summary__value ${remainingAfterBudgetsCents < 0 ? "negative" : "positive"}`}
+            >
+              {formatCents(remainingAfterBudgetsCents)}
+            </div>
+          </div>
         </div>
         <div className="cashflow-totals">
           <span>
@@ -56,6 +69,9 @@ export function Account({ dataset }: { dataset: Dataset }) {
           </span>
           <span>
             Dépenses <strong>{formatCents(expenseCents)}</strong>
+          </span>
+          <span>
+            Budgets <strong>{formatCents(budgetCents)}</strong>
           </span>
         </div>
       </div>
@@ -71,6 +87,7 @@ export function Account({ dataset }: { dataset: Dataset }) {
         emptyLabel="Aucune dépense mensuelle ce mois-ci."
         items={expenses}
       />
+      <BudgetList items={budgets} />
     </div>
   );
 }
@@ -99,6 +116,35 @@ function CashflowList({
               {it.description && <div className="muted">{it.description}</div>}
             </div>
             <span className={positive ? "positive" : undefined}>{formatCents(it.amountCents)}</span>
+          </div>
+        ))
+      )}
+    </div>
+  );
+}
+
+/**
+ * The category budgets deducted from the cashflow. Read-only mirror of the
+ * postes de dépenses — each line is the poste's allocated monthly budget, so
+ * they're managed in Réglages, not here.
+ */
+function BudgetList({ items }: { items: CategoryBudgetLine[] }) {
+  return (
+    <div className="card">
+      <h3>Budgets</h3>
+      {items.length === 0 ? (
+        <p className="muted">Aucun budget ce mois-ci.</p>
+      ) : (
+        items.map(({ category, amountCents }) => (
+          <div className="list-item" key={category.id}>
+            <span className="poste__name">
+              <span
+                className="poste__dot"
+                style={category.color ? { background: category.color } : undefined}
+              />
+              {category.name}
+            </span>
+            <span>{formatCents(amountCents)}</span>
           </div>
         ))
       )}
