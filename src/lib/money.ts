@@ -32,3 +32,8 @@ export function isValidPositiveAmount(input: string): boolean {
   const cents = eurosToCents(input);
   return Number.isFinite(cents) && cents > 0;
 }
+
+/** True when the string parses to any amount of cents — zero and negative included. */
+export function isValidAmount(input: string): boolean {
+  return Number.isFinite(eurosToCents(input));
+}

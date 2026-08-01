@@ -13,6 +13,11 @@ mois sur l'autre. Hébergée en statique sur **GitHub Pages**, données dans
   du poste.
 - Le **solde restant** est reporté au mois suivant : `départ(mois) = initial +
   report(mois‑1)`. Le report négatif est conservé (symétrique).
+- Le report d'un mois peut être **modifié à la main**, ou **remis à zéro** pour
+  repartir du montant initial sans le reste du mois précédent (poste par poste
+  dans les Réglages, ou d'un coup pour tous les postes). L'ajustement ne vaut
+  que pour ce mois-là : les mois passés ne bougent pas et le mois suivant
+  reprend son report normal.
 - Le **1er du mois**, tout « repart » automatiquement : le mois courant est
   simplement `mois(aujourd'hui)` et le solde est **recalculé** depuis le journal
   de dépenses (source de vérité). Pas de tâche planifiée, pas de serveur.

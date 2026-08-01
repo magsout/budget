@@ -7,7 +7,9 @@ import {
   addRecurringExpense,
   addUser,
   changeCategoryBudget,
+  clearCarryOverride,
   type NewCashflowInput,
+  setCarryOverride,
   setCategoryArchived,
   softDeleteIncome,
   softDeleteRecurringExpense,
@@ -15,10 +17,21 @@ import {
   updateIncome,
   updateRecurringExpense,
 } from "../../data/firestore.ts";
-import { budgetVersionFor } from "../../lib/budget.ts";
+import {
+  budgetVersionFor,
+  carryOverrideFor,
+  categoriesActiveIn,
+  monthStateFor,
+} from "../../lib/budget.ts";
 import { DEFAULT_CATEGORY_COLOR } from "../../lib/colors.ts";
-import { currentMonth, formatMonth } from "../../lib/dates.ts";
-import { centsToInput, eurosToCents, isValidPositiveAmount } from "../../lib/money.ts";
+import { currentMonth, formatMonth, prevMonth } from "../../lib/dates.ts";
+import { carryLabel } from "../../lib/labels.ts";
+import {
+  centsToInput,
+  eurosToCents,
+  isValidAmount,
+  isValidPositiveAmount,
+} from "../../lib/money.ts";
 import { formatCents } from "../../lib/money.ts";
 import type { Category, Dataset, Income, RecurringExpense } from "../../lib/types.ts";
 
@@ -32,6 +45,7 @@ export function Config({ dataset }: { dataset: Dataset }) {
   return (
     <div>
       <CategoriesSection dataset={dataset} />
+      <CarryResetSection dataset={dataset} />
       <CashflowSection
         title="Dépenses mensuelles"
         errorContext="dépense mensuelle"
@@ -140,14 +154,28 @@ function CategoryRow({ category, dataset }: { category: Category; dataset: Datas
   const { notifyError } = useData();
   const month = currentMonth();
   const currentAmount = budgetVersionFor(dataset.budgetVersions, category.id, month);
+
+  // The report the fold would produce on its own (last month's remaining), and
+  // the hand-set one if any. `autoCarry` is what "rétablir le calcul" restores.
+  const autoCarryCents = monthStateFor(dataset, category.id, prevMonth(month))?.remainingCents ?? 0;
+  const override = carryOverrideFor(dataset.carryOverrides, category.id, month);
+  const effectiveCarryCents = override ?? autoCarryCents;
+  const carryNote = carryLabel({
+    carryInCents: effectiveCarryCents,
+    carryAdjusted: override !== null,
+  });
+
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(category.name);
   const [amount, setAmount] = useState(centsToInput(currentAmount));
   const [color, setColor] = useState(category.color ?? DEFAULT_CATEGORY_COLOR);
+  const [carry, setCarry] = useState(centsToInput(effectiveCarryCents));
+
+  const carryValid = isValidAmount(carry);
 
   // Optimistic: queue the writes and close the editor immediately.
   const save = () => {
-    if (!isValidPositiveAmount(amount) || name.trim().length === 0) return;
+    if (!isValidPositiveAmount(amount) || name.trim().length === 0 || !carryValid) return;
     const patch: { name?: string; color?: string } = {};
     if (name.trim() !== category.name) patch.name = name.trim();
     if (color !== (category.color ?? null)) patch.color = color;
@@ -155,6 +183,16 @@ function CategoryRow({ category, dataset }: { category: Category; dataset: Datas
     if (Object.keys(patch).length > 0) ops.push(updateCategory(category.id, patch));
     const cents = eurosToCents(amount);
     if (cents !== currentAmount) ops.push(changeCategoryBudget(category.id, cents, month));
+
+    // Typing the computed value back means "stop overriding", so drop the doc
+    // rather than freeze a value that would then stop tracking the ledger.
+    const carryCents = eurosToCents(carry);
+    if (carryCents === autoCarryCents) {
+      if (override !== null) ops.push(clearCarryOverride(category.id, month));
+    } else if (carryCents !== override) {
+      ops.push(setCarryOverride(category.id, month, carryCents));
+    }
+
     Promise.all(ops).catch((err: unknown) => notifyError(syncErrorMessage("poste", err)));
     setEditing(false);
   };
@@ -190,8 +228,51 @@ function CategoryRow({ category, dataset }: { category: Category; dataset: Datas
         <div style={{ width: "100%", marginTop: 8 }}>
           <ColorSwatchPicker value={color} onChange={setColor} label="Couleur du poste" />
         </div>
+        <div className="field" style={{ width: "100%", marginTop: 8 }}>
+          <span className="field__label">Report de {formatMonth(prevMonth(month))}</span>
+          <div className="row">
+            <input
+              className="input"
+              inputMode="text"
+              value={carry}
+              onChange={(e) => setCarry(e.target.value)}
+              aria-label="Report"
+            />
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() => setCarry(centsToInput(0))}
+              disabled={eurosToCents(carry) === 0}
+            >
+              Remettre à zéro
+            </button>
+          </div>
+          {!carryValid ? (
+            <p className="muted negative">Montant invalide (un report peut être négatif).</p>
+          ) : override !== null ? (
+            <p className="muted">
+              Report ajusté à la main.{" "}
+              <button
+                type="button"
+                className="btn btn--ghost btn--sm"
+                onClick={() => setCarry(centsToInput(autoCarryCents))}
+              >
+                Rétablir le calcul ({formatCents(autoCarryCents)})
+              </button>
+            </p>
+          ) : (
+            <p className="muted">
+              À zéro, le mois repart du montant initial sans le reste du mois précédent.
+            </p>
+          )}
+        </div>
         <div className="row" style={{ width: "100%", marginTop: 8 }}>
-          <button type="button" className="btn btn--primary btn--sm" onClick={save}>
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            onClick={save}
+            disabled={!carryValid}
+          >
             Enregistrer
           </button>
           <button type="button" className="btn btn--sm" onClick={() => setEditing(false)}>
@@ -215,11 +296,84 @@ function CategoryRow({ category, dataset }: { category: Category; dataset: Datas
           />
           <strong>{category.name}</strong>
         </div>
-        <div className="muted">{formatCents(currentAmount)} / mois</div>
+        <div className="muted">
+          {formatCents(currentAmount)} / mois
+          {carryNote ? ` · ${carryNote}` : ""}
+        </div>
       </div>
       <button type="button" className="btn btn--ghost btn--sm" onClick={() => setEditing(true)}>
         Modifier
       </button>
+    </div>
+  );
+}
+
+/* ---- carry reset (all postes at once) ----------------------------------- */
+
+/**
+ * Month-wide reset: force every active poste's report to zero so the current
+ * month restarts from its initial amounts. Past months are untouched (the
+ * override only applies to this month) and next month carries over as usual.
+ */
+function CarryResetSection({ dataset }: { dataset: Dataset }) {
+  const { notifyError } = useData();
+  const month = currentMonth();
+
+  // Same set the dashboard shows for the month, so the counts always match.
+  const active = categoriesActiveIn(dataset, month);
+  const carried = active.filter(
+    (c) => (monthStateFor(dataset, c.id, month)?.carryInCents ?? 0) !== 0,
+  );
+  const adjusted = active.filter(
+    (c) => carryOverrideFor(dataset.carryOverrides, c.id, month) !== null,
+  );
+
+  const run = (ops: Promise<void>[]) => {
+    Promise.all(ops).catch((err: unknown) => notifyError(syncErrorMessage("report", err)));
+  };
+
+  const resetAll = () => {
+    if (
+      !confirm(
+        `Ignorer le report de ${carried.length} poste(s) pour ${formatMonth(month)} ? Chacun repart de son montant initial.`,
+      )
+    ) {
+      return;
+    }
+    run(carried.map((c) => setCarryOverride(c.id, month, 0)));
+  };
+
+  const restoreAll = () => {
+    run(adjusted.map((c) => clearCarryOverride(c.id, month)));
+  };
+
+  return (
+    <div className="card">
+      <h3>Reports</h3>
+      <p className="muted">
+        Chaque poste reporte son solde d'un mois sur l'autre. Remets les reports à zéro pour que{" "}
+        {formatMonth(month)} reparte des montants initiaux, sans le reste du mois précédent.
+      </p>
+      <button
+        type="button"
+        className="btn btn--block"
+        onClick={resetAll}
+        disabled={carried.length === 0}
+      >
+        {carried.length === 0
+          ? "Aucun report à ignorer ce mois-ci"
+          : `Ignorer les reports de ${formatMonth(month)}`}
+      </button>
+      {adjusted.length > 0 && (
+        <button
+          type="button"
+          className="btn btn--ghost btn--block"
+          style={{ marginTop: 8 }}
+          onClick={restoreAll}
+        >
+          Rétablir les reports calculés ({adjusted.length})
+        </button>
+      )}
     </div>
   );
 }

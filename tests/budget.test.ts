@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
 import {
   budgetVersionFor,
+  carryOverrideFor,
   categoriesActiveIn,
   computeTimeline,
   monthStateFor,
   monthSummary,
   totalRemaining,
 } from "../src/lib/budget.ts";
-import type { BudgetVersion, Category, Dataset, Expense } from "../src/lib/types.ts";
+import type { BudgetVersion, CarryOverride, Category, Dataset, Expense } from "../src/lib/types.ts";
 
 function cat(id: string, createdMonth: string, over: Partial<Category> = {}): Category {
   return {
@@ -22,6 +23,16 @@ function cat(id: string, createdMonth: string, over: Partial<Category> = {}): Ca
 
 function ver(categoryId: string, amountCents: number, effectiveFrom: string): BudgetVersion {
   return { id: `${categoryId}-${effectiveFrom}`, categoryId, amountCents, effectiveFrom };
+}
+
+function carry(categoryId: string, month: string, carryInCents: number): CarryOverride {
+  return {
+    id: `${categoryId}_${month}`,
+    categoryId,
+    month,
+    carryInCents,
+    createdAt: `${month}-01T09:00:00.000Z`,
+  };
 }
 
 function exp(
@@ -48,6 +59,7 @@ function dataset(over: Partial<Dataset> = {}): Dataset {
     users: [],
     categories: [],
     budgetVersions: [],
+    carryOverrides: [],
     expenses: [],
     recurringExpenses: [],
     incomes: [],
@@ -178,6 +190,97 @@ describe("computeTimeline carryover", () => {
       carryInCents: -2000,
       remainingCents: 8000,
     });
+  });
+});
+
+describe("carry overrides", () => {
+  const base = {
+    categories: [cat("c", "2026-06")],
+    budgetVersions: [ver("c", 10000, "2026-06")],
+    expenses: [exp("c", 4000, "2026-06-10")],
+  };
+
+  it("carryOverrideFor matches on category AND month", () => {
+    const overrides = [carry("c", "2026-07", 0), carry("other", "2026-07", 5000)];
+    expect(carryOverrideFor(overrides, "c", "2026-07")).toBe(0);
+    expect(carryOverrideFor(overrides, "c", "2026-08")).toBeNull();
+    expect(carryOverrideFor(overrides, "nope", "2026-07")).toBeNull();
+  });
+
+  it("a zero override drops the previous month's leftover", () => {
+    // Without it: June leaves 60 -> July starts at 100 + 60.
+    const auto = computeTimeline(dataset(base), "c", "2026-07");
+    expect(auto[1]).toMatchObject({ carryInCents: 6000, startingCents: 16000 });
+
+    const reset = computeTimeline(
+      dataset({ ...base, carryOverrides: [carry("c", "2026-07", 0)] }),
+      "c",
+      "2026-07",
+    );
+    expect(reset[1]).toMatchObject({
+      carryInCents: 0,
+      carryAdjusted: true,
+      startingCents: 10000,
+      remainingCents: 10000,
+    });
+  });
+
+  it("wipes an overdraft too (reset is symmetric)", () => {
+    const ds = dataset({
+      categories: [cat("c", "2026-06")],
+      budgetVersions: [ver("c", 10000, "2026-06")],
+      expenses: [exp("c", 15000, "2026-06-10")],
+      carryOverrides: [carry("c", "2026-07", 0)],
+    });
+    const tl = computeTimeline(ds, "c", "2026-07");
+    expect(tl[0].remainingCents).toBe(-5000);
+    expect(tl[1]).toMatchObject({ carryInCents: 0, remainingCents: 10000 });
+  });
+
+  it("a non-zero override forces an arbitrary report", () => {
+    const tl = computeTimeline(
+      dataset({ ...base, carryOverrides: [carry("c", "2026-07", 2500)] }),
+      "c",
+      "2026-07",
+    );
+    expect(tl[1]).toMatchObject({ carryInCents: 2500, startingCents: 12500 });
+  });
+
+  it("leaves earlier months untouched and resumes folding after", () => {
+    const tl = computeTimeline(
+      dataset({ ...base, carryOverrides: [carry("c", "2026-07", 0)] }),
+      "c",
+      "2026-09",
+    );
+    expect(tl.map((r) => r.carryInCents)).toEqual([0, 0, 10000, 20000]);
+    expect(tl.map((r) => r.carryAdjusted)).toEqual([false, true, false, false]);
+    expect(tl[0].remainingCents).toBe(6000); // June unchanged
+  });
+
+  it("applies on the first month of a timeline", () => {
+    const tl = computeTimeline(
+      dataset({ ...base, carryOverrides: [carry("c", "2026-06", 3000)] }),
+      "c",
+      "2026-06",
+    );
+    expect(tl[0]).toMatchObject({ carryInCents: 3000, startingCents: 13000 });
+  });
+
+  it("an override on an otherwise empty month opens the timeline there", () => {
+    const ds = dataset({
+      categories: [cat("c", "2026-07")],
+      budgetVersions: [ver("c", 10000, "2026-07")],
+      carryOverrides: [carry("c", "2026-05", 2000)],
+    });
+    const tl = computeTimeline(ds, "c", "2026-07");
+    expect(tl[0]).toMatchObject({ month: "2026-05", carryInCents: 2000, remainingCents: 2000 });
+  });
+
+  it("flows through monthSummary and totalRemaining", () => {
+    const ds = dataset({ ...base, carryOverrides: [carry("c", "2026-07", 0)] });
+    expect(monthStateFor(ds, "c", "2026-07")?.remainingCents).toBe(10000);
+    expect(monthSummary(ds, "2026-07")[0].state.carryAdjusted).toBe(true);
+    expect(totalRemaining(ds, "2026-07")).toBe(10000);
   });
 });
 

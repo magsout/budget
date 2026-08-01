@@ -31,6 +31,21 @@ export interface BudgetVersion {
   effectiveFrom: MonthKey; // "YYYY-MM"
 }
 
+/**
+ * A manual override of a category's carried-over balance for one month.
+ * Without one, the carry-in is the previous month's remaining (see lib/budget.ts).
+ * With one, the fold uses `carryInCents` for that month instead — `0` means
+ * "repartir de zéro", i.e. ignore last month's leftover (or overdraft). Later
+ * months keep folding normally from there.
+ */
+export interface CarryOverride {
+  id: string;
+  categoryId: string;
+  month: MonthKey; // "YYYY-MM" — the month whose carry-in is forced
+  carryInCents: number; // may be negative; 0 = reset
+  createdAt: string; // ISO timestamp
+}
+
 /** A single expense — the immutable ledger and the source of truth for balances. */
 export interface Expense {
   id: string;
@@ -77,6 +92,7 @@ export interface Dataset {
   users: User[];
   categories: Category[];
   budgetVersions: BudgetVersion[];
+  carryOverrides: CarryOverride[];
   expenses: Expense[];
   recurringExpenses: RecurringExpense[];
   incomes: Income[];

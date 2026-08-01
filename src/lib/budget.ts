@@ -1,5 +1,5 @@
 import { type MonthKey, monthOf, monthRange } from "./dates.ts";
-import type { BudgetVersion, Category, Dataset, Expense } from "./types.ts";
+import type { BudgetVersion, CarryOverride, Category, Dataset, Expense } from "./types.ts";
 
 /** State of one category for one month. */
 export interface MonthState {
@@ -8,6 +8,8 @@ export interface MonthState {
   initialCents: number;
   /** Carried-over balance from the previous month (may be negative). */
   carryInCents: number;
+  /** True when `carryInCents` was forced by hand rather than folded from M-1. */
+  carryAdjusted: boolean;
   /** initial + carryIn — the budget actually available this month. */
   startingCents: number;
   /** Total spent in this category this month. */
@@ -44,6 +46,19 @@ export function budgetVersionFor(
   return best ? best.amountCents : 0;
 }
 
+/**
+ * The hand-set carry-in for a category in a month, or null when none applies
+ * (the normal case: the carry-in is folded from the previous month).
+ */
+export function carryOverrideFor(
+  overrides: CarryOverride[],
+  categoryId: string,
+  month: MonthKey,
+): number | null {
+  const found = overrides.find((o) => o.categoryId === categoryId && o.month === month);
+  return found ? found.carryInCents : null;
+}
+
 /** Sum of non-deleted expenses for a category in a given month. */
 export function spentForCategoryMonth(
   expenses: Expense[],
@@ -62,7 +77,8 @@ export function spentForCategoryMonth(
 
 /**
  * Earliest month relevant to a category: the min of its creation month, its
- * earliest budget version, and its earliest (possibly back-dated) expense.
+ * earliest budget version, its earliest carry override, and its earliest
+ * (possibly back-dated) expense.
  */
 export function firstActivityMonth(
   dataset: Dataset,
@@ -79,6 +95,9 @@ export function firstActivityMonth(
   for (const v of dataset.budgetVersions) {
     if (v.categoryId === categoryId) consider(v.effectiveFrom);
   }
+  for (const o of dataset.carryOverrides) {
+    if (o.categoryId === categoryId) consider(o.month);
+  }
   for (const e of dataset.expenses) {
     if (e.categoryId === categoryId && !e.deletedAt) consider(monthOf(e.date));
   }
@@ -91,6 +110,10 @@ export function firstActivityMonth(
  * carryover forward. This is the single source of truth for every balance:
  * skipped months, back-dated expenses and versioned budget changes all resolve
  * correctly because nothing is ever frozen.
+ *
+ * A carry override replaces the folded carry-in for its month only; the fold
+ * then resumes from the resulting remaining, so a reset in month M leaves the
+ * months before M untouched and lets M+1 carry over as usual.
  */
 export function computeTimeline(
   dataset: Dataset,
@@ -102,14 +125,17 @@ export function computeTimeline(
   const rows: MonthState[] = [];
   let carry = 0;
   for (const month of months) {
+    const override = carryOverrideFor(dataset.carryOverrides, categoryId, month);
+    const carryInCents = override ?? carry;
     const initialCents = budgetVersionFor(dataset.budgetVersions, categoryId, month);
     const spentCents = spentForCategoryMonth(dataset.expenses, categoryId, month);
-    const startingCents = initialCents + carry;
+    const startingCents = initialCents + carryInCents;
     const remainingCents = startingCents - spentCents;
     rows.push({
       month,
       initialCents,
-      carryInCents: carry,
+      carryInCents,
+      carryAdjusted: override !== null,
       startingCents,
       spentCents,
       remainingCents,
@@ -148,6 +174,7 @@ function emptyState(month: MonthKey): MonthState {
     month,
     initialCents: 0,
     carryInCents: 0,
+    carryAdjusted: false,
     startingCents: 0,
     spentCents: 0,
     remainingCents: 0,
@@ -186,6 +213,7 @@ export function earliestMonth(dataset: Dataset, fallback: MonthKey): MonthKey {
   };
   for (const c of dataset.categories) consider(monthKeyOfIso(c.createdAt));
   for (const v of dataset.budgetVersions) consider(v.effectiveFrom);
+  for (const o of dataset.carryOverrides) consider(o.month);
   for (const e of dataset.expenses) if (!e.deletedAt) consider(monthOf(e.date));
   return earliest ?? fallback;
 }

@@ -6,6 +6,7 @@ import {
   totalRemaining,
 } from "../../lib/budget.ts";
 import { currentMonth, formatDate, formatMonth, prevMonth } from "../../lib/dates.ts";
+import { carryLabel } from "../../lib/labels.ts";
 import { formatCents } from "../../lib/money.ts";
 import type { Dataset } from "../../lib/types.ts";
 
@@ -77,7 +78,7 @@ export function History({ dataset }: { dataset: Dataset }) {
             <span>
               Budget {formatCents(state.startingCents)} · dépensé {formatCents(state.spentCents)}
             </span>
-            {state.carryInCents !== 0 && <span>Report {formatCents(state.carryInCents)}</span>}
+            {carryLabel(state) && <span>{carryLabel(state)}</span>}
           </div>
         </div>
       ))}

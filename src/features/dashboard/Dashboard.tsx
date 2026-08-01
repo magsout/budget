@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { expensesForMonth, monthSummary, totalRemaining } from "../../lib/budget.ts";
 import { currentMonth, formatDate, formatMonth } from "../../lib/dates.ts";
+import { carryLabel } from "../../lib/labels.ts";
 import { formatCents } from "../../lib/money.ts";
 import type { Dataset, Expense } from "../../lib/types.ts";
 import { ExpenseForm } from "../expense/ExpenseForm.tsx";
@@ -86,7 +87,7 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
                 <span>
                   Dépensé {formatCents(state.spentCents)} / {formatCents(state.startingCents)}
                 </span>
-                {state.carryInCents !== 0 && <span>Report {formatCents(state.carryInCents)}</span>}
+                {carryLabel(state) && <span>{carryLabel(state)}</span>}
               </div>
             </button>
           );

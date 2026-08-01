@@ -66,6 +66,7 @@ function dataset(over: Partial<Dataset> = {}): Dataset {
     users: [],
     categories: [],
     budgetVersions: [],
+    carryOverrides: [],
     expenses: [],
     recurringExpenses: [],
     incomes: [],

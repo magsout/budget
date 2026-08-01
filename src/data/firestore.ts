@@ -1,9 +1,11 @@
 import {
   addDoc,
   collection,
+  deleteDoc,
   doc,
   getDocs,
   query,
+  setDoc,
   updateDoc,
   where,
   writeBatch,
@@ -15,6 +17,7 @@ import type { DateKey } from "../lib/dates.ts";
 export const usersCol = collection(db, "users");
 export const categoriesCol = collection(db, "categories");
 export const budgetVersionsCol = collection(db, "budgetVersions");
+export const carryOverridesCol = collection(db, "carryOverrides");
 export const expensesCol = collection(db, "expenses");
 export const recurringExpensesCol = collection(db, "recurringExpenses");
 export const incomesCol = collection(db, "incomes");
@@ -97,6 +100,40 @@ export async function changeCategoryBudget(
     return;
   }
   await addDoc(budgetVersionsCol, { categoryId, amountCents, effectiveFrom });
+}
+
+/* ---- carry overrides ---------------------------------------------------- */
+
+/**
+ * At most one override per (category, month), so the doc id is derived from the
+ * pair rather than auto-generated: the write is idempotent, needs no
+ * read-modify-write round trip, and therefore still works offline.
+ */
+function carryOverrideRef(categoryId: string, month: MonthKey) {
+  return doc(carryOverridesCol, `${categoryId}_${month}`);
+}
+
+/**
+ * Force a category's carried-over balance for `month`, replacing the amount
+ * folded from the previous month. `0` means "repartir de zéro" — ignore last
+ * month's leftover (or overdraft) without touching the past.
+ */
+export async function setCarryOverride(
+  categoryId: string,
+  month: MonthKey,
+  carryInCents: number,
+): Promise<void> {
+  await setDoc(carryOverrideRef(categoryId, month), {
+    categoryId,
+    month,
+    carryInCents,
+    createdAt: nowIso(),
+  });
+}
+
+/** Drop the override so the carry-in is computed from the ledger again. */
+export async function clearCarryOverride(categoryId: string, month: MonthKey): Promise<void> {
+  await deleteDoc(carryOverrideRef(categoryId, month));
 }
 
 /* ---- expenses ----------------------------------------------------------- */
