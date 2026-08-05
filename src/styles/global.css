@@ -11,9 +11,15 @@
   --negative: #dc2626;
   --warning: #d97706;
   --radius: 14px;
-  /* Height of the fixed bottom nav, excluding the safe-area inset. Shared by
-     the bar, the page's bottom padding and the FAB's offset. */
-  --tabbar-h: 60px;
+  /* Vertical room the floating bar occupies (shell + its bottom gutter),
+     excluding the safe-area inset. Shared by the bar, the page's bottom
+     padding and the FAB's offset so the three can never drift apart. */
+  --tabbar-h: 80px;
+  /* What the slot adds to that when it is filled (its padding + divider). */
+  --tabbar-slot-h: 28px;
+  /* Translucent chrome for the floating bar. */
+  --glass-bg: rgb(255 255 255 / 72%);
+  --glass-border: rgb(15 23 42 / 8%);
   --shadow: 0 1px 3px rgb(15 23 42 / 8%), 0 1px 2px rgb(15 23 42 / 6%);
   --maxw: 640px;
 }
@@ -31,6 +37,8 @@
     --negative: #f87171;
     --warning: #fbbf24;
     --shadow: 0 1px 3px rgb(0 0 0 / 40%);
+    --glass-bg: rgb(17 24 39 / 72%);
+    --glass-border: rgb(255 255 255 / 10%);
   }
 }
 
@@ -85,9 +93,15 @@ code {
 .app {
   max-width: var(--maxw);
   margin: 0 auto;
-  /* Clear the fixed bottom bar (--tabbar-h) plus the iOS home indicator, so the
+  /* Clear the floating bar (--tabbar-h) plus the iOS home indicator, so the
      last row of a list is never trapped underneath it. */
   padding: 16px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px);
+}
+
+/* A filled slot makes the bar taller; the page owes it that much more room.
+   Browsers without :has() simply keep the base padding. */
+body:has(.tabbar__slot) .app {
+  padding-bottom: calc(var(--tabbar-h) + var(--tabbar-slot-h) + env(safe-area-inset-bottom) + 16px);
 }
 
 .topbar {
@@ -98,20 +112,13 @@ code {
   padding: 4px 2px 12px;
 }
 
-.topbar__brand {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-}
-
 .topbar__title {
   font-size: 1.35rem;
   font-weight: 700;
 }
 
-/* Discreet sync spinner shown while data is refreshing / writes are syncing. */
-.topbar__sync {
+/* Spinner inside the tab bar's sync pill. */
+.sync-pill__spinner {
   flex: none;
   width: 14px;
   height: 14px;
@@ -129,26 +136,54 @@ code {
 
 /* ---- bottom navigation --------------------------------------------------- */
 
-/* Full-bleed so it meets the screen edges; its items stay within --maxw like
-   the rest of the app. Below the modal (50) and the pull-to-refresh (40): the
-   expense sheet must cover it. */
+/* Floating: the wrapper spans the screen but only paints the gutters, so taps
+   in the margins fall through to the page. Sits below the modal (50) and the
+   pull-to-refresh (40) — the expense sheet must cover it. */
 .tabbar {
   position: fixed;
   left: 0;
   right: 0;
   bottom: 0;
   z-index: 30;
-  background: var(--surface);
-  border-top: 1px solid var(--border);
-  padding-bottom: env(safe-area-inset-bottom);
+  display: flex;
+  justify-content: center;
+  padding: 0 12px calc(10px + env(safe-area-inset-bottom));
+  pointer-events: none;
 }
 
-.tabbar__inner {
+.tabbar__shell {
+  pointer-events: auto;
+  width: 100%;
   max-width: var(--maxw);
-  margin: 0 auto;
-  height: var(--tabbar-h);
+  padding: 5px;
+  border-radius: 26px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid var(--glass-border);
+  box-shadow:
+    0 10px 30px rgb(15 23 42 / 16%),
+    0 2px 8px rgb(15 23 42 / 8%);
+}
+
+/* Without blur support the translucency would just look washed out. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .tabbar__shell {
+    background: var(--surface);
+  }
+}
+
+/* The mini-player slot, inside the same floating container. */
+.tabbar__slot {
+  padding: 6px 10px 8px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--glass-border);
+}
+
+.tabbar__nav {
   display: flex;
   align-items: stretch;
+  height: 58px;
 }
 
 .tabbar__item {
@@ -164,11 +199,13 @@ code {
   font-weight: 600;
   font-size: 0.68rem;
   padding: 0 2px;
+  border-radius: 21px;
 }
 
 .tabbar__item svg {
   width: 23px;
   height: 23px;
+  flex: none;
 }
 
 .tabbar__item[aria-current="page"] {
@@ -178,7 +215,55 @@ code {
 .tabbar__item:focus-visible {
   outline: 2px solid var(--primary);
   outline-offset: -3px;
-  border-radius: 10px;
+}
+
+.tabbar__label {
+  overflow: hidden;
+  max-height: 1.3em;
+}
+
+/* Shrink-on-scroll-down. Gated on `no-preference`: asking for less motion gets
+   a bar that simply never resizes, rather than one that snaps between two
+   heights on every scroll. 46px keeps the tap target above the 44px floor. */
+@media (prefers-reduced-motion: no-preference) {
+  .tabbar__nav {
+    transition: height 0.22s ease;
+  }
+
+  .tabbar__item {
+    transition: gap 0.22s ease;
+  }
+
+  .tabbar__label {
+    transition:
+      max-height 0.22s ease,
+      opacity 0.16s ease;
+  }
+
+  .tabbar--compact .tabbar__nav {
+    height: 46px;
+  }
+
+  .tabbar--compact .tabbar__item {
+    gap: 0;
+  }
+
+  .tabbar--compact .tabbar__label {
+    max-height: 0;
+    opacity: 0;
+  }
+}
+
+/* ---- sync pill (fills the bar's slot) ------------------------------------ */
+
+.sync-pill {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: var(--text-muted);
 }
 
 /* ---- cards & lists ------------------------------------------------------ */

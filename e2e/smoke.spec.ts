@@ -63,6 +63,33 @@ test.describe("Budget", () => {
     ).toHaveCount(0);
   });
 
+  test("la barre se réduit au scroll vers le bas et reprend vers le haut", async ({ page }) => {
+    await page.goto("fixture.html");
+    const bar = page.locator(".tabbar");
+    await expect(bar).not.toHaveClass(/tabbar--compact/);
+
+    await page.mouse.wheel(0, 500);
+    await expect(bar).toHaveClass(/tabbar--compact/);
+    // Icons stay, labels go — and the tap target keeps its 44px floor.
+    await expect(page.locator(".tabbar__item svg").first()).toBeVisible();
+    const box = await page.locator(".tabbar__item").first().boundingBox();
+    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+
+    await page.mouse.wheel(0, -300);
+    await expect(bar).not.toHaveClass(/tabbar--compact/);
+  });
+
+  test("le slot du mini-player s'affiche dans le conteneur flottant", async ({ page }) => {
+    await page.goto("fixture.html");
+    await expect(page.locator(".tabbar__slot")).toHaveCount(0);
+
+    await page.goto("fixture.html?sync=1");
+    const slot = page.locator(".tabbar__slot");
+    await expect(slot).toContainText("Synchronisation");
+    // Same floating container as the tabs, above them.
+    await expect(page.locator(".tabbar__shell .tabbar__slot")).toHaveCount(1);
+  });
+
   test("la barre s'efface sur Réglages et revient au retour", async ({ page }) => {
     await page.goto("fixture.html");
     await openSettings(page);

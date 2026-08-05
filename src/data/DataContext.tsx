@@ -194,9 +194,12 @@ export function DataProvider({ children }: { children: ReactNode }) {
  */
 export function StaticDataProvider({
   dataset,
+  syncing = false,
   children,
 }: {
   dataset: Dataset;
+  /** Simulate a pending sync, so the harness can show the offline indicator. */
+  syncing?: boolean;
   children: ReactNode;
 }) {
   const [error, setError] = useState<string | null>(null);
@@ -205,11 +208,11 @@ export function StaticDataProvider({
       dataset,
       loading: false,
       error,
-      syncing: false,
-      pendingWrites: false,
+      syncing,
+      pendingWrites: syncing,
       notifyError: setError,
     }),
-    [dataset, error],
+    [dataset, syncing, error],
   );
   return <DataContext value={value}>{children}</DataContext>;
 }

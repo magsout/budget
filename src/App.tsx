@@ -23,10 +23,16 @@ export function App() {
   const [configOpen, setConfigOpen] = useState(false);
   const { dataset, loading, error, syncing, pendingWrites } = useData();
 
-  // Discreet indicator: data shown from cache (offline / not yet confirmed) or
-  // local writes still being pushed to the server.
+  // Data shown from cache (offline / not yet confirmed) or local writes still
+  // being pushed. Rides in the tab bar's slot: transient, like a mini-player.
   const showSync = syncing || pendingWrites;
   const syncLabel = pendingWrites ? "Synchronisation…" : "Mise à jour…";
+  const syncPill = showSync ? (
+    <span className="sync-pill" role="status">
+      <span className="sync-pill__spinner" aria-hidden />
+      {syncLabel}
+    </span>
+  ) : undefined;
 
   return (
     <PullToRefresh>
@@ -50,17 +56,7 @@ export function App() {
         ) : (
           <>
             <div className="topbar">
-              <span className="topbar__brand">
-                <span className="topbar__title">Budget</span>
-                {showSync && (
-                  <span
-                    className="topbar__sync"
-                    role="status"
-                    aria-label={syncLabel}
-                    title={syncLabel}
-                  />
-                )}
-              </span>
+              <span className="topbar__title">Budget</span>
               <div className="topbar__actions">
                 <AccountMenu onOpenConfig={() => setConfigOpen(true)} />
               </div>
@@ -82,7 +78,7 @@ export function App() {
 
             {/* Réglages is a sub-page, not a tab: it owns a « ‹ Retour » button
                 and no tab could legitimately be marked active there. */}
-            <BottomNav tabs={TABS} active={tab} onChange={setTab} />
+            <BottomNav tabs={TABS} active={tab} onChange={setTab} slot={syncPill} />
           </>
         )}
       </div>

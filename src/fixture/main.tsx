@@ -21,10 +21,14 @@ localStorage.setItem("budget:currentUserId", FIXTURE_DATASET.users[0].id);
 const root = document.getElementById("root");
 if (!root) throw new Error("#root introuvable");
 
+// ?sync=1 forces the pending-sync state, the only way to see the tab bar's slot
+// (real syncing never happens here — nothing is subscribed).
+const syncing = new URLSearchParams(location.search).get("sync") === "1";
+
 createRoot(root).render(
   <StrictMode>
     <AuthProvider>
-      <StaticDataProvider dataset={FIXTURE_DATASET}>
+      <StaticDataProvider dataset={FIXTURE_DATASET} syncing={syncing}>
         <CurrentUserProvider>
           <App />
         </CurrentUserProvider>
