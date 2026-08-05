@@ -587,6 +587,99 @@ textarea.input {
   white-space: nowrap;
 }
 
+/* Poste card acting as a disclosure in the Historique. */
+.poste__toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+}
+
+/* ---- per-poste trend ---------------------------------------------------- */
+
+.trend {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trend__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.85rem;
+}
+
+.trend__label {
+  flex: none;
+  width: 4.5em;
+  color: var(--text-muted);
+}
+
+/* Spent bar overlays the budget bar so the overshoot is visible at a glance. */
+.trend__bars {
+  position: relative;
+  flex: 1;
+  height: 14px;
+}
+
+.trend__bar {
+  position: absolute;
+  left: 0;
+  top: 0;
+  height: 100%;
+  border-radius: 999px;
+}
+
+.trend__bar--budget {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+}
+
+.trend__bar--spent {
+  background: var(--positive);
+}
+
+.trend__bar--over {
+  background: var(--negative);
+}
+
+.trend__value {
+  flex: none;
+  width: 5.5em;
+  text-align: right;
+  color: var(--text-muted);
+}
+
+/* Per-person spending row: label line above its share bar. */
+.split {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.split:last-child {
+  border-bottom: none;
+}
+
+.split__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
 /* ---- color swatch picker ------------------------------------------------ */
 
 .swatches {

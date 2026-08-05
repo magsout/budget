@@ -1,10 +1,13 @@
 import { useMemo, useState } from "react";
+import { CategoryFilter } from "../../components/CategoryFilter.tsx";
 import {
-  categoryExpenseCounts,
   expensesForMonth,
+  filterExpensesByCategory,
   monthSummary,
+  spendByUser,
   totalRemaining,
 } from "../../lib/budget.ts";
+import { avatarColorFor } from "../../lib/colors.ts";
 import { currentMonth, formatDate, formatMonth } from "../../lib/dates.ts";
 import { carryLabel } from "../../lib/labels.ts";
 import { formatCents } from "../../lib/money.ts";
@@ -31,18 +34,8 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
   const summary = useMemo(() => monthSummary(dataset, month), [dataset, month]);
   const total = useMemo(() => totalRemaining(dataset, month), [dataset, month]);
   const expenses = useMemo(() => expensesForMonth(dataset, month), [dataset, month]);
-  const filters = useMemo(
-    () => categoryExpenseCounts(expenses, dataset.categories),
-    [expenses, dataset.categories],
-  );
-
-  // The selected poste can lose its last expense (deleted or re-categorised),
-  // which would leave an empty list under a tab that no longer exists.
-  const activeFilter =
-    filter !== null && filters.some((f) => f.category.id === filter) ? filter : null;
-  const visibleExpenses = activeFilter
-    ? expenses.filter((e) => e.categoryId === activeFilter)
-    : expenses;
+  const visibleExpenses = filterExpensesByCategory(expenses, filter);
+  const perUser = useMemo(() => spendByUser(expenses, dataset.users), [expenses, dataset.users]);
 
   const categoryName = (id: string) => dataset.categories.find((c) => c.id === id)?.name ?? "—";
   const userName = (id: string) => dataset.users.find((u) => u.id === id)?.firstName ?? "—";
@@ -113,39 +106,52 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
         })
       )}
 
+      {perUser.length > 1 && (
+        <div className="card">
+          <h3>Qui a dépensé quoi</h3>
+          {perUser.map(({ user, totalCents, count }) => (
+            <div className="split" key={user.id}>
+              <div className="split__head">
+                <span className="poste__name">
+                  <span
+                    className="account-menu__avatar"
+                    style={{ background: avatarColorFor(user.id) }}
+                    aria-hidden
+                  >
+                    {user.firstName.charAt(0).toUpperCase()}
+                  </span>
+                  {user.firstName}
+                </span>
+                <span>
+                  <strong>{formatCents(totalCents)}</strong>{" "}
+                  <span className="muted">
+                    · {count} dépense{count > 1 ? "s" : ""}
+                  </span>
+                </span>
+              </div>
+              <div className="bar">
+                <div
+                  className="bar__fill"
+                  style={{
+                    width: `${(totalCents / perUser[0].totalCents) * 100}%`,
+                    background: avatarColorFor(user.id),
+                  }}
+                />
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       {expenses.length > 0 && (
         <div className="card">
           <h3>Dépenses du mois</h3>
-          {/* A lone poste needs no filter — "Tous" would show the same list. */}
-          {filters.length > 1 && (
-            <div className="chips chips--strip" style={{ marginBottom: 12 }}>
-              <button
-                type="button"
-                className={`chip ${activeFilter === null ? "chip--active" : ""}`}
-                aria-pressed={activeFilter === null}
-                onClick={() => setFilter(null)}
-              >
-                Tous ({expenses.length})
-              </button>
-              {filters.map(({ category, count }) => (
-                <button
-                  type="button"
-                  key={category.id}
-                  className={`chip chip--poste ${
-                    activeFilter === category.id ? "chip--active" : ""
-                  }`}
-                  aria-pressed={activeFilter === category.id}
-                  onClick={() => setFilter(category.id)}
-                >
-                  <span
-                    className="poste__dot"
-                    style={category.color ? { background: category.color } : undefined}
-                  />
-                  {category.name} ({count})
-                </button>
-              ))}
-            </div>
-          )}
+          <CategoryFilter
+            expenses={expenses}
+            categories={dataset.categories}
+            value={filter}
+            onChange={setFilter}
+          />
           {visibleExpenses.map((e) => (
             <button
               type="button"

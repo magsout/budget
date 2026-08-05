@@ -1,5 +1,5 @@
 import { type MonthKey, monthOf, monthRange } from "./dates.ts";
-import type { BudgetVersion, CarryOverride, Category, Dataset, Expense } from "./types.ts";
+import type { BudgetVersion, CarryOverride, Category, Dataset, Expense, User } from "./types.ts";
 
 /** State of one category for one month. */
 export interface MonthState {
@@ -245,6 +245,59 @@ export function categoryExpenseCounts(
         a.category.sortOrder - b.category.sortOrder ||
         a.category.name.localeCompare(b.category.name),
     );
+}
+
+/**
+ * Rows of `expenses` belonging to `categoryId`. Everything is returned when the
+ * id is null OR no longer matches any row — so a poste that loses its last
+ * expense can never leave an empty list behind a filter that no longer exists.
+ */
+export function filterExpensesByCategory(
+  expenses: Expense[],
+  categoryId: string | null,
+): Expense[] {
+  if (categoryId === null) return expenses;
+  const matching = expenses.filter((e) => e.categoryId === categoryId);
+  return matching.length > 0 ? matching : expenses;
+}
+
+/** How much each person spent across `expenses`, biggest spender first. */
+export interface UserSpend {
+  user: User;
+  totalCents: number;
+  count: number;
+}
+
+/**
+ * Per-person totals. Expenses have always carried `userId` without anything
+ * aggregating it, though the app is built for a household. People with nothing
+ * to their name this month are dropped rather than shown at zero.
+ */
+export function spendByUser(expenses: Expense[], users: User[]): UserSpend[] {
+  const totals = new Map<string, { totalCents: number; count: number }>();
+  for (const e of expenses) {
+    const acc = totals.get(e.userId) ?? { totalCents: 0, count: 0 };
+    totals.set(e.userId, { totalCents: acc.totalCents + e.amountCents, count: acc.count + 1 });
+  }
+  return users
+    .filter((u) => totals.has(u.id))
+    .map((user) => ({ user, ...(totals.get(user.id) ?? { totalCents: 0, count: 0 }) }))
+    .toSorted(
+      (a, b) => b.totalCents - a.totalCents || a.user.firstName.localeCompare(b.user.firstName),
+    );
+}
+
+/**
+ * The last `count` months of a category's timeline, oldest first. The fold
+ * already produces the whole series; only one month of it was ever displayed.
+ */
+export function recentTimeline(
+  dataset: Dataset,
+  categoryId: string,
+  uptoMonth: MonthKey,
+  count: number,
+): MonthState[] {
+  return computeTimeline(dataset, categoryId, uptoMonth).slice(-count);
 }
 
 /** The earliest month with any activity across the whole dataset. */

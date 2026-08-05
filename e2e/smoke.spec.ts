@@ -62,6 +62,16 @@ test.describe("Budget", () => {
     await expect(rows).toHaveCount(5);
   });
 
+  test("la répartition par personne totalise chaque profil", async ({ page }) => {
+    await page.goto("fixture.html");
+
+    const split = page.locator(".card").filter({ hasText: "Qui a dépensé quoi" });
+    await expect(split.locator(".split")).toHaveCount(2);
+    // Biggest spender first.
+    await expect(split.locator(".split").first()).toContainText("Marie");
+    await expect(split.locator(".split").first()).toContainText("2 dépenses");
+  });
+
   test("la dépense supprimée est absente du mois mais présente en corbeille", async ({ page }) => {
     await page.goto("fixture.html");
     await expect(page.getByText("Erreur")).toHaveCount(0);
@@ -70,6 +80,32 @@ test.describe("Budget", () => {
     const trash = page.locator(".card").filter({ hasText: "Corbeille" });
     await expect(trash.getByText("Erreur")).toBeVisible();
     await expect(trash.getByRole("button", { name: "Restaurer" })).toBeVisible();
+  });
+});
+
+test.describe("Historique", () => {
+  test.beforeEach(async ({ page }) => {
+    await page.goto("fixture.html");
+    await page.getByRole("button", { name: "Historique", exact: true }).click();
+  });
+
+  test("le filtre par poste s'applique aussi au mois passé", async ({ page }) => {
+    const list = page.locator(".card").filter({ hasText: "Dépenses" }).last();
+    await expect(list.locator(".list-item")).toHaveCount(4);
+
+    await page.getByRole("button", { name: "Courses (2)" }).click();
+    await expect(list.locator(".list-item")).toHaveCount(2);
+  });
+
+  test("déplier un poste montre sa tendance sur plusieurs mois", async ({ page }) => {
+    await expect(page.locator(".trend")).toHaveCount(0);
+
+    await page.locator(".poste__toggle").first().click();
+    const trend = page.locator(".trend");
+    await expect(trend).toBeVisible();
+    // Six months of history, each with a spent value.
+    await expect(trend.locator(".trend__row")).toHaveCount(6);
+    await expect(trend.locator(".trend__row").last()).toContainText("635,00");
   });
 });
 

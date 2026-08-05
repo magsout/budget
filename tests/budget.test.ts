@@ -7,11 +7,21 @@ import {
   computeTimeline,
   deletedExpenses,
   expensesForMonth,
+  filterExpensesByCategory,
   monthStateFor,
   monthSummary,
+  recentTimeline,
+  spendByUser,
   totalRemaining,
 } from "../src/lib/budget.ts";
-import type { BudgetVersion, CarryOverride, Category, Dataset, Expense } from "../src/lib/types.ts";
+import type {
+  BudgetVersion,
+  CarryOverride,
+  Category,
+  Dataset,
+  Expense,
+  User,
+} from "../src/lib/types.ts";
 
 function cat(id: string, createdMonth: string, over: Partial<Category> = {}): Category {
   return {
@@ -326,6 +336,79 @@ describe("monthSummary & active categories", () => {
 
   it("totalRemaining sums active categories", () => {
     expect(totalRemaining(ds, "2026-07")).toBe(115000 + 80000);
+  });
+});
+
+describe("filterExpensesByCategory", () => {
+  const rows = [
+    exp("courses", 1000, "2026-07-01"),
+    exp("loisirs", 2000, "2026-07-02"),
+    exp("courses", 3000, "2026-07-03"),
+  ];
+
+  it("returns everything for the null selection", () => {
+    expect(filterExpensesByCategory(rows, null)).toEqual(rows);
+  });
+
+  it("keeps only the selected poste", () => {
+    expect(filterExpensesByCategory(rows, "courses").map((e) => e.amountCents)).toEqual([
+      1000, 3000,
+    ]);
+  });
+
+  it("falls back to everything when the selection has no rows left", () => {
+    // The poste lost its last expense: showing an empty list under a filter
+    // that no longer exists would be a dead end.
+    expect(filterExpensesByCategory(rows, "essence")).toEqual(rows);
+  });
+});
+
+describe("spendByUser", () => {
+  const users: User[] = [
+    { id: "u1", firstName: "Guillaume", createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "u2", firstName: "Marie", createdAt: "2026-01-01T00:00:00.000Z" },
+    { id: "u3", firstName: "Personne", createdAt: "2026-01-01T00:00:00.000Z" },
+  ];
+
+  it("totals per person, biggest spender first", () => {
+    const rows = [
+      exp("c", 1000, "2026-07-01", { userId: "u1" }),
+      exp("c", 5000, "2026-07-02", { userId: "u2" }),
+      exp("c", 2000, "2026-07-03", { userId: "u1" }),
+    ];
+    expect(spendByUser(rows, users).map((s) => [s.user.id, s.totalCents, s.count])).toEqual([
+      ["u2", 5000, 1],
+      ["u1", 3000, 2],
+    ]);
+  });
+
+  it("drops people with nothing this month", () => {
+    const rows = [exp("c", 1000, "2026-07-01", { userId: "u1" })];
+    expect(spendByUser(rows, users).map((s) => s.user.id)).toEqual(["u1"]);
+  });
+
+  it("ignores an expense whose author no longer exists", () => {
+    const rows = [exp("c", 1000, "2026-07-01", { userId: "ghost" })];
+    expect(spendByUser(rows, users)).toEqual([]);
+  });
+});
+
+describe("recentTimeline", () => {
+  const ds = dataset({
+    categories: [cat("c", "2026-01")],
+    budgetVersions: [ver("c", 10000, "2026-01")],
+  });
+
+  it("returns the last N months, oldest first", () => {
+    const rows = recentTimeline(ds, "c", "2026-07", 3);
+    expect(rows.map((r) => r.month)).toEqual(["2026-05", "2026-06", "2026-07"]);
+  });
+
+  it("returns the whole (shorter) history without padding", () => {
+    expect(recentTimeline(ds, "c", "2026-02", 6).map((r) => r.month)).toEqual([
+      "2026-01",
+      "2026-02",
+    ]);
   });
 });
 

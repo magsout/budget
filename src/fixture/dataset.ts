@@ -20,6 +20,7 @@ function expense(
   userId: string,
   description: string | null,
   deletedAt: string | null = null,
+  month: string = M,
 ): Expense {
   return {
     id,
@@ -27,8 +28,8 @@ function expense(
     userId,
     amountCents,
     description,
-    date: `${M}-${day}`,
-    createdAt: `${M}-${day}T12:00:00.000Z`,
+    date: `${month}-${day}`,
+    createdAt: `${month}-${day}T12:00:00.000Z`,
     deletedAt,
   };
 }
@@ -104,6 +105,11 @@ export const FIXTURE_DATASET: Dataset = {
     expense("e4", "essence", 6510, "06", "u2", "Plein"),
     expense("e5", "courses", 3120, "07", "u1", null),
     expense("e6", "loisirs", 1800, "08", "u2", "Erreur", `${M}-09T08:00:00.000Z`),
+    // Last month, so the Historique tab and the per-poste trend have content.
+    expense("p1", "courses", 51200, "05", "u1", "Grosses courses", null, PREV),
+    expense("p2", "courses", 12300, "18", "u2", null, null, PREV),
+    expense("p3", "essence", 7100, "12", "u1", "Plein", null, PREV),
+    expense("p4", "loisirs", 24500, "22", "u2", "Restaurant", null, PREV),
   ],
   recurringExpenses: [
     {
