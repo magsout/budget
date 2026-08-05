@@ -6,8 +6,15 @@ import { defineConfig } from "vitest/config";
 // Override with VITE_BASE (e.g. "/" for a custom domain or user page).
 const base = process.env.VITE_BASE ?? "/budget/";
 
+// The fixture harness (fixture.html) is always served in dev, but is only an
+// entry point of the BUILD when VITE_E2E=1 — so it never ships to GitHub Pages.
+const e2e = process.env.VITE_E2E === "1";
+
 export default defineConfig({
   base,
+  build: e2e
+    ? { rollupOptions: { input: { index: "index.html", fixture: "fixture.html" } } }
+    : undefined,
   plugins: [
     react(),
     VitePWA({

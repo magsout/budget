@@ -13,8 +13,8 @@
     "icons": "node scripts/gen-icons.mjs",
     "lint": "oxlint",
     "lint:fix": "oxlint --fix",
-    "format": "oxfmt src tests",
-    "format:check": "oxfmt --check src tests",
+    "format": "oxfmt src tests e2e",
+    "format:check": "oxfmt --check src tests e2e",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test"

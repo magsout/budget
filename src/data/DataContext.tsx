@@ -185,6 +185,35 @@ export function DataProvider({ children }: { children: ReactNode }) {
   return <DataContext value={value}>{children}</DataContext>;
 }
 
+/**
+ * Provides a fixed dataset with NO Firestore subscription. This is the seam the
+ * fixture harness (and the Playwright smoke tests) render the real screens
+ * through: the app is behind a shared-account auth gate, so there is no other
+ * way to exercise the UI without credentials. Writes still go to `firestore.ts`
+ * and are simply never acknowledged here.
+ */
+export function StaticDataProvider({
+  dataset,
+  children,
+}: {
+  dataset: Dataset;
+  children: ReactNode;
+}) {
+  const [error, setError] = useState<string | null>(null);
+  const value = useMemo<DataState>(
+    () => ({
+      dataset,
+      loading: false,
+      error,
+      syncing: false,
+      pendingWrites: false,
+      notifyError: setError,
+    }),
+    [dataset, error],
+  );
+  return <DataContext value={value}>{children}</DataContext>;
+}
+
 export function useData(): DataState {
   const ctx = use(DataContext);
   if (!ctx) throw new Error("useData must be used within <DataProvider>");

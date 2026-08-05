@@ -33,10 +33,26 @@ cp .env.example .env.local   # renseigner la config Firebase
 npm install
 npm run dev                  # http://localhost:5173
 npm test                     # tests unitaires (vitest)
+npm run test:e2e             # smoke tests Playwright (sur le harnais fixture)
 npm run lint                 # oxlint
 npm run format               # oxfmt
 npm run build                # build statique dans dist/
 ```
+
+### Harnais fixture
+
+L'app est derrière le compte Firebase partagé, donc ni la CI ni un test e2e ne
+peuvent l'ouvrir. `fixture.html` monte les **mêmes écrans** sur un jeu de
+données statique ([src/fixture](src/fixture)), sans authentification ni
+abonnement Firestore — pratique pour vérifier un rendu à la main :
+
+```bash
+npm run dev                  # puis http://localhost:5173/budget/fixture.html
+```
+
+Il n'est un point d'entrée du build que si `VITE_E2E=1`, donc il ne part jamais
+sur GitHub Pages. Les écritures y sont mises en file par Firestore et jamais
+confirmées : rien ne touche aux vraies données.
 
 ## Setup Firebase (une fois)
 
