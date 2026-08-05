@@ -217,43 +217,6 @@ body:has(.tabbar__slot) .app {
   outline-offset: -3px;
 }
 
-.tabbar__label {
-  overflow: hidden;
-  max-height: 1.3em;
-}
-
-/* Shrink-on-scroll-down. Gated on `no-preference`: asking for less motion gets
-   a bar that simply never resizes, rather than one that snaps between two
-   heights on every scroll. 46px keeps the tap target above the 44px floor. */
-@media (prefers-reduced-motion: no-preference) {
-  .tabbar__nav {
-    transition: height 0.22s ease;
-  }
-
-  .tabbar__item {
-    transition: gap 0.22s ease;
-  }
-
-  .tabbar__label {
-    transition:
-      max-height 0.22s ease,
-      opacity 0.16s ease;
-  }
-
-  .tabbar--compact .tabbar__nav {
-    height: 46px;
-  }
-
-  .tabbar--compact .tabbar__item {
-    gap: 0;
-  }
-
-  .tabbar--compact .tabbar__label {
-    max-height: 0;
-    opacity: 0;
-  }
-}
-
 /* ---- sync pill (fills the bar's slot) ------------------------------------ */
 
 .sync-pill {

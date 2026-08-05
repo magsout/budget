@@ -63,20 +63,30 @@ test.describe("Budget", () => {
     ).toHaveCount(0);
   });
 
-  test("la barre se réduit au scroll vers le bas et reprend vers le haut", async ({ page }) => {
+  test("la barre garde sa taille au scroll", async ({ page }) => {
     await page.goto("fixture.html");
-    const bar = page.locator(".tabbar");
-    await expect(bar).not.toHaveClass(/tabbar--compact/);
+    const nav = page.locator(".tabbar__nav");
+    const before = await nav.boundingBox();
 
     await page.mouse.wheel(0, 500);
-    await expect(bar).toHaveClass(/tabbar--compact/);
-    // Icons stay, labels go — and the tap target keeps its 44px floor.
-    await expect(page.locator(".tabbar__item svg").first()).toBeVisible();
-    const box = await page.locator(".tabbar__item").first().boundingBox();
-    expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+    await expect(page.locator(".tabbar__item").first()).toContainText("Budget");
+    expect((await nav.boundingBox())?.height).toBe(before?.height);
+  });
 
-    await page.mouse.wheel(0, -300);
-    await expect(bar).not.toHaveClass(/tabbar--compact/);
+  test("taper un onglet remonte en haut de page", async ({ page }) => {
+    await page.goto("fixture.html");
+    await page.mouse.wheel(0, 600);
+    await expect.poll(() => page.evaluate("window.scrollY")).toBeGreaterThan(0);
+
+    // Switching tabs: the next screen must not open mid-page.
+    await page.locator(".tabbar__item").nth(2).click();
+    await expect.poll(() => page.evaluate("window.scrollY")).toBe(0);
+
+    // And tapping the tab you are already on is "back to top".
+    await page.mouse.wheel(0, 400);
+    await expect.poll(() => page.evaluate("window.scrollY")).toBeGreaterThan(0);
+    await page.locator(".tabbar__item").nth(2).click();
+    await expect.poll(() => page.evaluate("window.scrollY")).toBe(0);
   });
 
   test("le slot du mini-player s'affiche dans le conteneur flottant", async ({ page }) => {
