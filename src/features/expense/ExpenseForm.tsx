@@ -2,9 +2,9 @@ import { type FormEvent, useMemo, useState } from "react";
 import { Modal } from "../../components/Modal.tsx";
 import { useData } from "../../data/DataContext.tsx";
 import { addExpense, softDeleteExpense, updateExpense } from "../../data/firestore.ts";
-import { categoriesActiveIn } from "../../lib/budget.ts";
-import { currentMonth, localToday } from "../../lib/dates.ts";
-import { centsToInput, eurosToCents, isValidPositiveAmount } from "../../lib/money.ts";
+import { categoriesActiveIn, frequentExpenses } from "../../lib/budget.ts";
+import { currentMonth, localToday, prevMonth } from "../../lib/dates.ts";
+import { centsToInput, eurosToCents, formatCents, isValidPositiveAmount } from "../../lib/money.ts";
 import type { Dataset, Expense } from "../../lib/types.ts";
 import { activeUsers } from "../../lib/users.ts";
 import { useCurrentUser } from "../../user/CurrentUserContext.tsx";
@@ -62,6 +62,22 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
 
   const selectedColor = categories.find((c) => c.id === categoryId)?.color;
 
+  // Habits from the last three months, offered as one-tap prefills. Only when
+  // creating: in edit mode the fields already hold the values being changed.
+  const frequent = useMemo(() => {
+    if (editing) return [];
+    const since = prevMonth(prevMonth(currentMonth()));
+    return frequentExpenses(dataset.expenses, { since }).filter((f) =>
+      categories.some((c) => c.id === f.categoryId),
+    );
+  }, [dataset.expenses, categories, editing]);
+
+  const applyFrequent = (amountCents: number, category: string, desc: string | null) => {
+    setAmount(centsToInput(amountCents));
+    setCategoryId(category);
+    setDescription(desc ?? "");
+  };
+
   const canSubmit =
     isValidPositiveAmount(amount) &&
     categoryId !== "" &&
@@ -115,6 +131,30 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
         </p>
       ) : (
         <form onSubmit={onSubmit}>
+          {frequent.length > 0 && (
+            <div className="field">
+              <span className="field__label">Fréquent</span>
+              <div className="chips chips--strip">
+                {frequent.map((f) => {
+                  const category = categories.find((c) => c.id === f.categoryId);
+                  return (
+                    <button
+                      type="button"
+                      key={`${f.categoryId}-${f.description}-${f.amountCents}`}
+                      className="chip chip--poste"
+                      onClick={() => applyFrequent(f.amountCents, f.categoryId, f.description)}
+                    >
+                      <span
+                        className="poste__dot"
+                        style={category?.color ? { background: category.color } : undefined}
+                      />
+                      {f.description ?? category?.name} · {formatCents(f.amountCents)}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           <div className="field">
             <label className="field__label" htmlFor="amount">
               Montant (€)

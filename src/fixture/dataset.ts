@@ -11,6 +11,8 @@ import type { Dataset, Expense } from "../lib/types.ts";
 
 const M = currentMonth();
 const PREV = prevMonth(M);
+/** Two months back: inside the "frequent" window, outside the months the e2e counts assert on. */
+const PREV2 = prevMonth(PREV);
 
 function expense(
   id: string,
@@ -110,6 +112,10 @@ export const FIXTURE_DATASET: Dataset = {
     expense("p2", "courses", 12300, "18", "u2", null, null, PREV),
     expense("p3", "essence", 7100, "12", "u1", "Plein", null, PREV),
     expense("p4", "loisirs", 24500, "22", "u2", "Restaurant", null, PREV),
+    // A repeated combination, so the expense form has a "Fréquent" shortcut.
+    expense("h1", "courses", 650, "03", "u1", "Boulangerie", null, PREV2),
+    expense("h2", "courses", 650, "11", "u1", "Boulangerie", null, PREV2),
+    expense("h3", "courses", 650, "24", "u2", "Boulangerie", null, PREV2),
   ],
   recurringExpenses: [
     {

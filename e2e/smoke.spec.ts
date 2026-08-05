@@ -72,6 +72,19 @@ test.describe("Budget", () => {
     await expect(split.locator(".split").first()).toContainText("2 dépenses");
   });
 
+  test("un raccourci fréquent préremplit le formulaire en un tap", async ({ page }) => {
+    await page.goto("fixture.html");
+    await page.getByRole("button", { name: "+ Ajouter une dépense" }).click();
+
+    await expect(page.locator("#amount")).toHaveValue("");
+    await page.getByRole("button", { name: /Boulangerie/ }).click();
+
+    await expect(page.locator("#amount")).toHaveValue("6,50");
+    await expect(page.locator("#category")).toHaveValue("courses");
+    await expect(page.locator("#description")).toHaveValue("Boulangerie");
+    await expect(page.getByRole("button", { name: "Ajouter la dépense" })).toBeEnabled();
+  });
+
   test("la dépense supprimée est absente du mois mais présente en corbeille", async ({ page }) => {
     await page.goto("fixture.html");
     await expect(page.getByText("Erreur")).toHaveCount(0);

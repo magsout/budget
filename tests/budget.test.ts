@@ -8,6 +8,7 @@ import {
   deletedExpenses,
   expensesForMonth,
   filterExpensesByCategory,
+  frequentExpenses,
   monthStateFor,
   monthSummary,
   recentTimeline,
@@ -409,6 +410,71 @@ describe("recentTimeline", () => {
       "2026-01",
       "2026-02",
     ]);
+  });
+});
+
+describe("frequentExpenses (saisie rapide)", () => {
+  const opts = { since: "2026-06" };
+
+  it("keeps combinations seen more than once, most frequent first", () => {
+    const rows = [
+      exp("courses", 4000, "2026-07-01", { description: "Carrefour" }),
+      exp("courses", 4000, "2026-07-08", { description: "Carrefour" }),
+      exp("courses", 4000, "2026-07-15", { description: "Carrefour" }),
+      exp("essence", 6000, "2026-07-03", { description: "Plein" }),
+      exp("essence", 6000, "2026-07-20", { description: "Plein" }),
+    ];
+    expect(frequentExpenses(rows, opts).map((f) => [f.description, f.count])).toEqual([
+      ["Carrefour", 3],
+      ["Plein", 2],
+    ]);
+  });
+
+  it("drops one-offs — a single expense is not a habit", () => {
+    const rows = [
+      exp("courses", 4000, "2026-07-01", { description: "Carrefour" }),
+      exp("loisirs", 999, "2026-07-02", { description: "Unique" }),
+    ];
+    expect(frequentExpenses(rows, opts)).toEqual([]);
+  });
+
+  it("separates combinations that differ by amount or poste", () => {
+    const rows = [
+      exp("courses", 4000, "2026-07-01", { description: "Carrefour" }),
+      exp("courses", 4000, "2026-07-02", { description: "Carrefour" }),
+      exp("courses", 5000, "2026-07-03", { description: "Carrefour" }),
+      exp("courses", 5000, "2026-07-04", { description: "Carrefour" }),
+    ];
+    expect(frequentExpenses(rows, opts).map((f) => f.amountCents)).toEqual([5000, 4000]);
+  });
+
+  it("groups blank descriptions together", () => {
+    const rows = [exp("courses", 4000, "2026-07-01"), exp("courses", 4000, "2026-07-02")];
+    expect(frequentExpenses(rows, opts)).toMatchObject([
+      { categoryId: "courses", description: null, amountCents: 4000, count: 2 },
+    ]);
+  });
+
+  it("ignores months before `since` and soft-deleted rows", () => {
+    const rows = [
+      exp("courses", 4000, "2026-01-01", { description: "Vieux" }),
+      exp("courses", 4000, "2026-02-01", { description: "Vieux" }),
+      exp("loisirs", 3000, "2026-07-01", { description: "Effacé" }),
+      exp("loisirs", 3000, "2026-07-02", {
+        description: "Effacé",
+        deletedAt: "2026-07-03T00:00:00.000Z",
+      }),
+    ];
+    expect(frequentExpenses(rows, opts)).toEqual([]);
+  });
+
+  it("caps the list", () => {
+    const rows = ["a", "b", "c", "d", "e"].flatMap((d, i) => [
+      exp("c", 1000 + i, "2026-07-01", { description: d }),
+      exp("c", 1000 + i, "2026-07-02", { description: d }),
+    ]);
+    expect(frequentExpenses(rows, opts)).toHaveLength(4);
+    expect(frequentExpenses(rows, { since: "2026-06", limit: 2 })).toHaveLength(2);
   });
 });
 

@@ -300,6 +300,49 @@ export function recentTimeline(
   return computeTimeline(dataset, categoryId, uptoMonth).slice(-count);
 }
 
+/** A frequently repeated expense, offered as a one-tap prefill. */
+export interface FrequentExpense {
+  categoryId: string;
+  description: string | null;
+  amountCents: number;
+  count: number;
+}
+
+/**
+ * The combinations (poste + description + amount) that keep coming back,
+ * derived from the ledger rather than stored as templates: there is no extra
+ * CRUD to maintain, and the list keeps itself current as habits change.
+ *
+ * Only combinations seen more than once qualify — a one-off is not a habit.
+ * `since` bounds how far back to look (a month key, inclusive).
+ */
+export function frequentExpenses(
+  expenses: Expense[],
+  { since, limit = 4 }: { since: MonthKey; limit?: number },
+): FrequentExpense[] {
+  const seen = new Map<string, FrequentExpense>();
+  for (const e of expenses) {
+    if (e.deletedAt) continue;
+    if (monthOf(e.date) < since) continue;
+    const key = `${e.categoryId}|${e.description ?? ""}|${e.amountCents}`;
+    const found = seen.get(key);
+    if (found) {
+      found.count += 1;
+    } else {
+      seen.set(key, {
+        categoryId: e.categoryId,
+        description: e.description,
+        amountCents: e.amountCents,
+        count: 1,
+      });
+    }
+  }
+  return [...seen.values()]
+    .filter((f) => f.count > 1)
+    .toSorted((a, b) => b.count - a.count || b.amountCents - a.amountCents)
+    .slice(0, limit);
+}
+
 /** The earliest month with any activity across the whole dataset. */
 export function earliestMonth(dataset: Dataset, fallback: MonthKey): MonthKey {
   let earliest: MonthKey | null = null;
