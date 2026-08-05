@@ -546,6 +546,31 @@ textarea.input {
   border-color: transparent;
 }
 
+/* Chip prefixed by a poste's color dot (dashboard expense filter). */
+.chip--poste {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Filter strip: one scrollable row rather than stacked rows, so a long list of
+   postes never pushes the content it filters off the screen. */
+.chips--strip {
+  flex-wrap: nowrap;
+  overflow-x: auto;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+
+.chips--strip::-webkit-scrollbar {
+  display: none;
+}
+
+.chips--strip .chip {
+  flex: none;
+  white-space: nowrap;
+}
+
 /* ---- color swatch picker ------------------------------------------------ */
 
 .swatches {

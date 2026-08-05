@@ -1,5 +1,10 @@
 import { useMemo, useState } from "react";
-import { expensesForMonth, monthSummary, totalRemaining } from "../../lib/budget.ts";
+import {
+  categoryExpenseCounts,
+  expensesForMonth,
+  monthSummary,
+  totalRemaining,
+} from "../../lib/budget.ts";
 import { currentMonth, formatDate, formatMonth } from "../../lib/dates.ts";
 import { carryLabel } from "../../lib/labels.ts";
 import { formatCents } from "../../lib/money.ts";
@@ -20,10 +25,24 @@ function remainingClass(remaining: number, starting: number): string {
 export function Dashboard({ dataset }: { dataset: Dataset }) {
   const month = currentMonth();
   const [form, setForm] = useState<FormState>(null);
+  /** Poste filtering the month's expense list; null = tous. */
+  const [filter, setFilter] = useState<string | null>(null);
 
   const summary = useMemo(() => monthSummary(dataset, month), [dataset, month]);
   const total = useMemo(() => totalRemaining(dataset, month), [dataset, month]);
   const expenses = useMemo(() => expensesForMonth(dataset, month), [dataset, month]);
+  const filters = useMemo(
+    () => categoryExpenseCounts(expenses, dataset.categories),
+    [expenses, dataset.categories],
+  );
+
+  // The selected poste can lose its last expense (deleted or re-categorised),
+  // which would leave an empty list under a tab that no longer exists.
+  const activeFilter =
+    filter !== null && filters.some((f) => f.category.id === filter) ? filter : null;
+  const visibleExpenses = activeFilter
+    ? expenses.filter((e) => e.categoryId === activeFilter)
+    : expenses;
 
   const categoryName = (id: string) => dataset.categories.find((c) => c.id === id)?.name ?? "—";
   const userName = (id: string) => dataset.users.find((u) => u.id === id)?.firstName ?? "—";
@@ -97,7 +116,37 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
       {expenses.length > 0 && (
         <div className="card">
           <h3>Dépenses du mois</h3>
-          {expenses.map((e) => (
+          {/* A lone poste needs no filter — "Tous" would show the same list. */}
+          {filters.length > 1 && (
+            <div className="chips chips--strip" style={{ marginBottom: 12 }}>
+              <button
+                type="button"
+                className={`chip ${activeFilter === null ? "chip--active" : ""}`}
+                aria-pressed={activeFilter === null}
+                onClick={() => setFilter(null)}
+              >
+                Tous ({expenses.length})
+              </button>
+              {filters.map(({ category, count }) => (
+                <button
+                  type="button"
+                  key={category.id}
+                  className={`chip chip--poste ${
+                    activeFilter === category.id ? "chip--active" : ""
+                  }`}
+                  aria-pressed={activeFilter === category.id}
+                  onClick={() => setFilter(category.id)}
+                >
+                  <span
+                    className="poste__dot"
+                    style={category.color ? { background: category.color } : undefined}
+                  />
+                  {category.name} ({count})
+                </button>
+              ))}
+            </div>
+          )}
+          {visibleExpenses.map((e) => (
             <button
               type="button"
               key={e.id}

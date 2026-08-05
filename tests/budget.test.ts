@@ -3,7 +3,9 @@ import {
   budgetVersionFor,
   carryOverrideFor,
   categoriesActiveIn,
+  categoryExpenseCounts,
   computeTimeline,
+  expensesForMonth,
   monthStateFor,
   monthSummary,
   totalRemaining,
@@ -323,5 +325,66 @@ describe("monthSummary & active categories", () => {
 
   it("totalRemaining sums active categories", () => {
     expect(totalRemaining(ds, "2026-07")).toBe(115000 + 80000);
+  });
+});
+
+describe("categoryExpenseCounts (dashboard filter)", () => {
+  const categories = [
+    cat("courses", "2026-06", { sortOrder: 1 }),
+    cat("loisirs", "2026-06", { sortOrder: 2 }),
+    cat("essence", "2026-06", { sortOrder: 3 }),
+  ];
+
+  it("counts lines per category, in sort order", () => {
+    const counts = categoryExpenseCounts(
+      [
+        exp("loisirs", 1000, "2026-07-02"),
+        exp("courses", 2000, "2026-07-03"),
+        exp("courses", 3000, "2026-07-04"),
+      ],
+      categories,
+    );
+    expect(counts.map((c) => [c.category.id, c.count])).toEqual([
+      ["courses", 2],
+      ["loisirs", 1],
+    ]);
+  });
+
+  it("drops categories with no expense rather than showing a zero", () => {
+    const counts = categoryExpenseCounts([exp("courses", 2000, "2026-07-03")], categories);
+    expect(counts.map((c) => c.category.id)).toEqual(["courses"]);
+  });
+
+  it("is empty when there is nothing to filter", () => {
+    expect(categoryExpenseCounts([], categories)).toEqual([]);
+  });
+
+  it("keeps an archived category that still holds expenses", () => {
+    const counts = categoryExpenseCounts(
+      [exp("old", 2000, "2026-07-03")],
+      [cat("old", "2026-01", { archivedAt: "2026-07-20T00:00:00.000Z" })],
+    );
+    expect(counts.map((c) => [c.category.id, c.count])).toEqual([["old", 1]]);
+  });
+
+  it("ignores expenses whose category no longer exists", () => {
+    const counts = categoryExpenseCounts(
+      [exp("courses", 2000, "2026-07-03"), exp("ghost", 5000, "2026-07-05")],
+      categories,
+    );
+    expect(counts.map((c) => c.category.id)).toEqual(["courses"]);
+  });
+
+  it("counts the list it is given (a month's expenses)", () => {
+    const ds = dataset({
+      categories,
+      expenses: [
+        exp("courses", 1000, "2026-07-03"),
+        exp("courses", 2000, "2026-08-01"),
+        exp("loisirs", 3000, "2026-07-09", { deletedAt: "2026-07-10T00:00:00.000Z" }),
+      ],
+    });
+    const counts = categoryExpenseCounts(expensesForMonth(ds, "2026-07"), categories);
+    expect(counts.map((c) => [c.category.id, c.count])).toEqual([["courses", 1]]);
   });
 });

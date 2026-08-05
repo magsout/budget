@@ -205,6 +205,35 @@ export function expensesForMonth(dataset: Dataset, month: MonthKey): Expense[] {
     );
 }
 
+/** A category holding expenses, and how many lines it holds. */
+export interface CategoryExpenseCount {
+  category: Category;
+  count: number;
+}
+
+/**
+ * How many of `expenses` fall in each category, keeping only the categories
+ * that actually have some, in the dashboard's display order. Counts whatever
+ * list it is handed (pass `expensesForMonth` output to scope it to a month),
+ * and includes archived categories — an expense logged before archiving still
+ * belongs to the month's list.
+ */
+export function categoryExpenseCounts(
+  expenses: Expense[],
+  categories: Category[],
+): CategoryExpenseCount[] {
+  const counts = new Map<string, number>();
+  for (const e of expenses) counts.set(e.categoryId, (counts.get(e.categoryId) ?? 0) + 1);
+  return categories
+    .filter((c) => counts.has(c.id))
+    .map((category) => ({ category, count: counts.get(category.id) ?? 0 }))
+    .toSorted(
+      (a, b) =>
+        a.category.sortOrder - b.category.sortOrder ||
+        a.category.name.localeCompare(b.category.name),
+    );
+}
+
 /** The earliest month with any activity across the whole dataset. */
 export function earliestMonth(dataset: Dataset, fallback: MonthKey): MonthKey {
   let earliest: MonthKey | null = null;
