@@ -9,22 +9,27 @@ import {
   changeCategoryBudget,
   clearCarryOverride,
   type NewCashflowInput,
+  reorderCategories,
+  restoreExpense,
   setCarryOverride,
   setCategoryArchived,
+  setUserArchived,
   softDeleteIncome,
   softDeleteRecurringExpense,
   updateCategory,
   updateIncome,
   updateRecurringExpense,
+  updateUser,
 } from "../../data/firestore.ts";
 import {
   budgetVersionFor,
   carryOverrideFor,
   categoriesActiveIn,
+  deletedExpenses,
   monthStateFor,
 } from "../../lib/budget.ts";
-import { DEFAULT_CATEGORY_COLOR } from "../../lib/colors.ts";
-import { currentMonth, formatMonth, prevMonth } from "../../lib/dates.ts";
+import { avatarColorFor, DEFAULT_CATEGORY_COLOR } from "../../lib/colors.ts";
+import { currentMonth, formatDate, formatMonth, prevMonth } from "../../lib/dates.ts";
 import { carryLabel } from "../../lib/labels.ts";
 import {
   centsToInput,
@@ -33,7 +38,9 @@ import {
   isValidPositiveAmount,
 } from "../../lib/money.ts";
 import { formatCents } from "../../lib/money.ts";
-import type { Category, Dataset, Income, RecurringExpense } from "../../lib/types.ts";
+import { moveInList } from "../../lib/order.ts";
+import type { Category, Dataset, Income, RecurringExpense, User } from "../../lib/types.ts";
+import { activeUsers } from "../../lib/users.ts";
 
 /** Route a terminal write failure to the shared error banner. Offline writes never
  * reject here — Firestore queues them — so this fires only on genuine errors. */
@@ -67,6 +74,7 @@ export function Config({ dataset }: { dataset: Dataset }) {
         softDelete={softDeleteIncome}
       />
       <UsersSection dataset={dataset} />
+      <TrashSection dataset={dataset} />
       <p className="muted" style={{ textAlign: "center", marginTop: 8 }}>
         Modifier un montant s'applique à partir du mois courant ({formatMonth(currentMonth())}) ;
         les mois passés gardent leur valeur.
@@ -89,6 +97,16 @@ function CategoriesSection({ dataset }: { dataset: Dataset }) {
 
   const canAdd = name.trim().length > 0 && isValidPositiveAmount(amount);
 
+  // Reordering lives here rather than in the row: only this level knows the
+  // full order, and the whole list is renumbered in one batch.
+  const move = (index: number, delta: number) => {
+    const reordered = moveInList(active, index, delta);
+    if (reordered === active) return;
+    reorderCategories(reordered.map((c) => c.id)).catch((err: unknown) =>
+      notifyError(syncErrorMessage("ordre des postes", err)),
+    );
+  };
+
   // Optimistic: queue the write and reset the form immediately; the listener
   // re-renders the new poste from the local cache and syncs in the background.
   const onAdd = (e: FormEvent) => {
@@ -106,9 +124,18 @@ function CategoriesSection({ dataset }: { dataset: Dataset }) {
     <div className="card">
       <h3>Postes de dépenses</h3>
       {active.length === 0 && <p className="muted">Aucun poste pour l'instant.</p>}
-      {active.map((c) => (
-        <CategoryRow key={c.id} category={c} dataset={dataset} />
+      {active.map((c, i) => (
+        <CategoryRow
+          key={c.id}
+          category={c}
+          dataset={dataset}
+          onMove={active.length > 1 ? (delta) => move(i, delta) : undefined}
+          isFirst={i === 0}
+          isLast={i === active.length - 1}
+        />
       ))}
+
+      <ArchivedCategories dataset={dataset} />
 
       <form onSubmit={onAdd} style={{ marginTop: 12 }}>
         <div className="row">
@@ -150,7 +177,20 @@ function CategoriesSection({ dataset }: { dataset: Dataset }) {
   );
 }
 
-function CategoryRow({ category, dataset }: { category: Category; dataset: Dataset }) {
+function CategoryRow({
+  category,
+  dataset,
+  onMove,
+  isFirst,
+  isLast,
+}: {
+  category: Category;
+  dataset: Dataset;
+  /** Undefined when there is nothing to reorder (a single poste). */
+  onMove?: (delta: number) => void;
+  isFirst: boolean;
+  isLast: boolean;
+}) {
   const { notifyError } = useData();
   const month = currentMonth();
   const currentAmount = budgetVersionFor(dataset.budgetVersions, category.id, month);
@@ -301,9 +341,130 @@ function CategoryRow({ category, dataset }: { category: Category; dataset: Datas
           {carryNote ? ` · ${carryNote}` : ""}
         </div>
       </div>
-      <button type="button" className="btn btn--ghost btn--sm" onClick={() => setEditing(true)}>
-        Modifier
+      <div className="list-item__actions">
+        {onMove && (
+          <>
+            <button
+              type="button"
+              className="btn btn--ghost btn--icon"
+              onClick={() => onMove(-1)}
+              disabled={isFirst}
+              aria-label={`Monter ${category.name}`}
+            >
+              ↑
+            </button>
+            <button
+              type="button"
+              className="btn btn--ghost btn--icon"
+              onClick={() => onMove(1)}
+              disabled={isLast}
+              aria-label={`Descendre ${category.name}`}
+            >
+              ↓
+            </button>
+          </>
+        )}
+        <button type="button" className="btn btn--ghost btn--sm" onClick={() => setEditing(true)}>
+          Modifier
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Archived postes, hidden behind a disclosure. Archiving is reversible in the
+ * data model (`archivedAt` back to null) but was unreachable from the UI.
+ */
+function ArchivedCategories({ dataset }: { dataset: Dataset }) {
+  const [open, setOpen] = useState(false);
+
+  const archived = dataset.categories
+    .filter((c) => c.archivedAt)
+    .toSorted((a, b) => (b.archivedAt ?? "").localeCompare(a.archivedAt ?? ""));
+
+  if (archived.length === 0) return null;
+
+  return (
+    <div style={{ marginTop: 12 }}>
+      <button
+        type="button"
+        className="btn btn--ghost btn--sm"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+      >
+        {open ? "▾" : "▸"} Postes archivés ({archived.length})
       </button>
+      {open &&
+        archived.map((c) => <ArchivedCategoryRow key={c.id} category={c} dataset={dataset} />)}
+    </div>
+  );
+}
+
+function ArchivedCategoryRow({ category, dataset }: { category: Category; dataset: Dataset }) {
+  const { notifyError } = useData();
+  const month = currentMonth();
+  const [confirming, setConfirming] = useState(false);
+
+  // What the fold would hand back on reactivation: the poste keeps its whole
+  // history, so an old balance (or overdraft) comes back with it.
+  const returningCarryCents = monthStateFor(dataset, category.id, month)?.carryInCents ?? 0;
+
+  const reactivate = (resetCarry: boolean) => {
+    const ops = [setCategoryArchived(category.id, false)];
+    if (resetCarry) ops.push(setCarryOverride(category.id, month, 0));
+    Promise.all(ops).catch((err: unknown) => notifyError(syncErrorMessage("réactivation", err)));
+    setConfirming(false);
+  };
+
+  return (
+    <div className="list-item" style={{ flexWrap: "wrap" }}>
+      <div>
+        <div className="poste__name">
+          <span
+            className="poste__dot"
+            style={category.color ? { background: category.color } : undefined}
+          />
+          <strong>{category.name}</strong>
+        </div>
+        <div className="muted">
+          Archivé{category.archivedAt ? ` le ${formatDate(category.archivedAt.slice(0, 10))}` : ""}
+        </div>
+      </div>
+      {confirming ? (
+        <>
+          <p className="muted" style={{ width: "100%", marginTop: 8 }}>
+            {returningCarryCents === 0
+              ? "Ce poste repart sans report."
+              : `Son report de ${formatCents(returningCarryCents)} revient avec lui.`}
+          </p>
+          <div className="row" style={{ width: "100%", marginTop: 8 }}>
+            <button
+              type="button"
+              className="btn btn--primary btn--sm"
+              onClick={() => reactivate(false)}
+            >
+              Réactiver
+            </button>
+            {returningCarryCents !== 0 && (
+              <button type="button" className="btn btn--sm" onClick={() => reactivate(true)}>
+                Réactiver à zéro
+              </button>
+            )}
+            <button type="button" className="btn btn--sm" onClick={() => setConfirming(false)}>
+              Annuler
+            </button>
+          </div>
+        </>
+      ) : (
+        <button
+          type="button"
+          className="btn btn--ghost btn--sm"
+          onClick={() => setConfirming(true)}
+        >
+          Réactiver
+        </button>
+      )}
     </div>
   );
 }
@@ -662,6 +823,53 @@ function CashflowRow({
   );
 }
 
+/* ---- trash -------------------------------------------------------------- */
+
+/**
+ * Deleted expenses, restorable. Deletion has always been a soft delete
+ * (`deletedAt`), so the rows were still there — just unreachable. Hidden
+ * entirely when empty rather than showing an empty card.
+ */
+function TrashSection({ dataset }: { dataset: Dataset }) {
+  const { notifyError } = useData();
+  const deleted = deletedExpenses(dataset);
+
+  if (deleted.length === 0) return null;
+
+  const categoryName = (id: string) => dataset.categories.find((c) => c.id === id)?.name ?? "—";
+  const userName = (id: string) => dataset.users.find((u) => u.id === id)?.firstName ?? "—";
+
+  const restore = (id: string) => {
+    restoreExpense(id).catch((err: unknown) => notifyError(syncErrorMessage("restauration", err)));
+  };
+
+  return (
+    <div className="card">
+      <h3>Corbeille</h3>
+      <p className="muted">
+        Dépenses supprimées. Les restaurer les remet dans le mois de leur date et recalcule les
+        soldes.
+      </p>
+      {deleted.map((e) => (
+        <div className="list-item" key={e.id}>
+          <div>
+            <div>
+              <strong>{formatCents(e.amountCents)}</strong> · {categoryName(e.categoryId)}
+            </div>
+            <div className="muted">
+              {formatDate(e.date)} · {userName(e.userId)}
+              {e.description ? ` · ${e.description}` : ""}
+            </div>
+          </div>
+          <button type="button" className="btn btn--ghost btn--sm" onClick={() => restore(e.id)}>
+            Restaurer
+          </button>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 /* ---- users -------------------------------------------------------------- */
 
 function UsersSection({ dataset }: { dataset: Dataset }) {
@@ -675,21 +883,21 @@ function UsersSection({ dataset }: { dataset: Dataset }) {
     setFirstName("");
   };
 
+  const active = activeUsers(dataset.users);
+  const archived = dataset.users.filter((u) => u.archivedAt);
+
   return (
     <div className="card">
       <h3>Utilisateurs</h3>
-      {dataset.users.length === 0 ? (
-        <p className="muted">Aucun utilisateur.</p>
-      ) : (
-        <div className="chips" style={{ marginBottom: 12 }}>
-          {dataset.users.map((u) => (
-            <span className="chip" key={u.id}>
-              {u.firstName}
-            </span>
-          ))}
-        </div>
-      )}
-      <form onSubmit={onAdd} className="row">
+      {active.length === 0 && <p className="muted">Aucun utilisateur.</p>}
+      {active.map((u) => (
+        // Retiring the last person would lock the expense form out entirely.
+        <UserRow key={u.id} user={u} canArchive={active.length > 1} />
+      ))}
+      {archived.map((u) => (
+        <ArchivedUserRow key={u.id} user={u} />
+      ))}
+      <form onSubmit={onAdd} className="row" style={{ marginTop: 12 }}>
         <input
           className="input"
           placeholder="Prénom"
@@ -701,6 +909,98 @@ function UsersSection({ dataset }: { dataset: Dataset }) {
           Ajouter
         </button>
       </form>
+    </div>
+  );
+}
+
+function UserRow({ user, canArchive }: { user: User; canArchive: boolean }) {
+  const { notifyError } = useData();
+  const [editing, setEditing] = useState(false);
+  const [name, setName] = useState(user.firstName);
+
+  const fail = (context: string) => (err: unknown) => notifyError(syncErrorMessage(context, err));
+
+  const save = () => {
+    if (name.trim().length === 0) return;
+    if (name.trim() !== user.firstName) updateUser(user.id, name).catch(fail("utilisateur"));
+    setEditing(false);
+  };
+
+  const archive = () => {
+    if (!confirm(`Retirer « ${user.firstName} » ? Ses dépenses passées gardent son nom.`)) return;
+    setUserArchived(user.id, true).catch(fail("utilisateur"));
+    setEditing(false);
+  };
+
+  if (editing) {
+    return (
+      <div className="list-item" style={{ flexWrap: "wrap" }}>
+        <input
+          className="input"
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          aria-label="Prénom"
+        />
+        <div className="row" style={{ width: "100%", marginTop: 8 }}>
+          <button
+            type="button"
+            className="btn btn--primary btn--sm"
+            onClick={save}
+            disabled={name.trim().length === 0}
+          >
+            Enregistrer
+          </button>
+          <button type="button" className="btn btn--sm" onClick={() => setEditing(false)}>
+            Annuler
+          </button>
+          {canArchive && (
+            <button type="button" className="btn btn--sm btn--danger" onClick={archive}>
+              Retirer
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="list-item">
+      <span className="poste__name">
+        <span
+          className="account-menu__avatar"
+          style={{ background: avatarColorFor(user.id) }}
+          aria-hidden
+        >
+          {user.firstName.charAt(0).toUpperCase()}
+        </span>
+        {user.firstName}
+      </span>
+      <button type="button" className="btn btn--ghost btn--sm" onClick={() => setEditing(true)}>
+        Modifier
+      </button>
+    </div>
+  );
+}
+
+function ArchivedUserRow({ user }: { user: User }) {
+  const { notifyError } = useData();
+  return (
+    <div className="list-item">
+      <div>
+        <span>{user.firstName}</span>
+        <div className="muted">Retiré</div>
+      </div>
+      <button
+        type="button"
+        className="btn btn--ghost btn--sm"
+        onClick={() =>
+          setUserArchived(user.id, false).catch((err: unknown) =>
+            notifyError(syncErrorMessage("utilisateur", err)),
+          )
+        }
+      >
+        Réactiver
+      </button>
     </div>
   );
 }

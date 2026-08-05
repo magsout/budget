@@ -1,6 +1,7 @@
 import { createContext, type ReactNode, use, useCallback, useMemo, useState } from "react";
 import { useData } from "../data/DataContext.tsx";
 import type { User } from "../lib/types.ts";
+import { activeUsers } from "../lib/users.ts";
 
 /** Which household member is currently using the shared account. */
 const CURRENT_USER_KEY = "budget:currentUserId";
@@ -14,7 +15,10 @@ interface CurrentUserState {
   currentUser: User | null;
   /** Remember a new current person (persists to localStorage). */
   setCurrentUser: (id: string) => void;
-  /** True when someone must be picked: users exist but none is selected. */
+  /**
+   * True when someone must be picked: people exist but none is selected — or
+   * the stored profile has since been retired.
+   */
   needsSelection: boolean;
 }
 
@@ -51,9 +55,11 @@ export function CurrentUserProvider({ children }: { children: ReactNode }) {
       currentUserId,
       currentUser,
       setCurrentUser,
-      needsSelection: dataset.users.length > 0 && currentUser === null,
+      needsSelection:
+        activeUsers(dataset.users).length > 0 &&
+        (currentUser === null || Boolean(currentUser.archivedAt)),
     }),
-    [currentUserId, currentUser, setCurrentUser, dataset.users.length],
+    [currentUserId, currentUser, setCurrentUser, dataset.users],
   );
 
   return <CurrentUserContext value={value}>{children}</CurrentUserContext>;

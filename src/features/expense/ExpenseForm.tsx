@@ -6,6 +6,7 @@ import { categoriesActiveIn } from "../../lib/budget.ts";
 import { currentMonth, localToday } from "../../lib/dates.ts";
 import { centsToInput, eurosToCents, isValidPositiveAmount } from "../../lib/money.ts";
 import type { Dataset, Expense } from "../../lib/types.ts";
+import { activeUsers } from "../../lib/users.ts";
 import { useCurrentUser } from "../../user/CurrentUserContext.tsx";
 
 interface Props {
@@ -35,15 +36,25 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
 
   const { currentUserId } = useCurrentUser();
 
+  const users = useMemo(() => {
+    const list = activeUsers(dataset.users);
+    // In edit mode, keep the expense's own (possibly retired) author selectable.
+    if (expense && !list.some((u) => u.id === expense.userId)) {
+      const own = dataset.users.find((u) => u.id === expense.userId);
+      if (own) list.push(own);
+    }
+    return list;
+  }, [dataset.users, expense]);
+
   const [amount, setAmount] = useState(expense ? centsToInput(expense.amountCents) : "");
   const [categoryId, setCategoryId] = useState(
     expense?.categoryId ?? defaultCategoryId ?? categories[0]?.id ?? "",
   );
   const [userId, setUserId] = useState(
     expense?.userId ??
-      (currentUserId && dataset.users.some((u) => u.id === currentUserId)
+      (currentUserId && users.some((u) => u.id === currentUserId)
         ? currentUserId
-        : (dataset.users[0]?.id ?? "")),
+        : (users[0]?.id ?? "")),
   );
   const [description, setDescription] = useState(expense?.description ?? "");
   const [date, setDate] = useState(expense?.date ?? localToday());
@@ -93,7 +104,7 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
     onClose();
   };
 
-  const needsSetup = categories.length === 0 || dataset.users.length === 0;
+  const needsSetup = categories.length === 0 || users.length === 0;
 
   return (
     <Modal title={editing ? "Modifier la dépense" : "Ajouter une dépense"} onClose={onClose}>
@@ -154,7 +165,7 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
               >
-                {dataset.users.map((u) => (
+                {users.map((u) => (
                   <option key={u.id} value={u.id}>
                     {u.firstName}
                   </option>

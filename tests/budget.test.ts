@@ -5,6 +5,7 @@ import {
   categoriesActiveIn,
   categoryExpenseCounts,
   computeTimeline,
+  deletedExpenses,
   expensesForMonth,
   monthStateFor,
   monthSummary,
@@ -325,6 +326,46 @@ describe("monthSummary & active categories", () => {
 
   it("totalRemaining sums active categories", () => {
     expect(totalRemaining(ds, "2026-07")).toBe(115000 + 80000);
+  });
+});
+
+describe("deletedExpenses (corbeille)", () => {
+  it("keeps only soft-deleted rows, most recently deleted first", () => {
+    const ds = dataset({
+      expenses: [
+        exp("c", 1000, "2026-07-01"),
+        exp("c", 2000, "2026-07-02", { deletedAt: "2026-07-05T10:00:00.000Z" }),
+        exp("c", 3000, "2026-07-03", { deletedAt: "2026-07-09T10:00:00.000Z" }),
+      ],
+    });
+    expect(deletedExpenses(ds).map((e) => e.amountCents)).toEqual([3000, 2000]);
+  });
+
+  it("orders by deletion time, not by expense date", () => {
+    const ds = dataset({
+      expenses: [
+        // The OLDER expense was deleted LAST, so it comes first.
+        exp("c", 1000, "2026-07-01", { deletedAt: "2026-07-20T10:00:00.000Z" }),
+        exp("c", 2000, "2026-07-15", { deletedAt: "2026-07-16T10:00:00.000Z" }),
+      ],
+    });
+    expect(deletedExpenses(ds).map((e) => e.amountCents)).toEqual([1000, 2000]);
+  });
+
+  it("caps the list", () => {
+    const ds = dataset({
+      expenses: Array.from({ length: 30 }, (_, i) =>
+        exp("c", 100 + i, `2026-07-${String((i % 28) + 1).padStart(2, "0")}`, {
+          deletedAt: `2026-08-${String((i % 28) + 1).padStart(2, "0")}T10:00:00.000Z`,
+        }),
+      ),
+    });
+    expect(deletedExpenses(ds)).toHaveLength(20);
+    expect(deletedExpenses(ds, 5)).toHaveLength(5);
+  });
+
+  it("is empty when nothing was deleted", () => {
+    expect(deletedExpenses(dataset({ expenses: [exp("c", 1000, "2026-07-01")] }))).toEqual([]);
   });
 });
 

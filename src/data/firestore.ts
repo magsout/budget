@@ -34,7 +34,19 @@ function monthOrNull(m: MonthKey | null | undefined): MonthKey | null {
 /* ---- users -------------------------------------------------------------- */
 
 export async function addUser(firstName: string): Promise<void> {
-  await addDoc(usersCol, { firstName: firstName.trim(), createdAt: nowIso() });
+  await addDoc(usersCol, { firstName: firstName.trim(), createdAt: nowIso(), archivedAt: null });
+}
+
+export async function updateUser(id: string, firstName: string): Promise<void> {
+  await updateDoc(doc(usersCol, id), { firstName: firstName.trim() });
+}
+
+/**
+ * Retire (or bring back) a person. Deliberately not a delete: expenses carry
+ * `userId`, and removing the doc would leave them without an author.
+ */
+export async function setUserArchived(id: string, archived: boolean): Promise<void> {
+  await updateDoc(doc(usersCol, id), { archivedAt: archived ? nowIso() : null });
 }
 
 /* ---- categories --------------------------------------------------------- */
@@ -76,6 +88,19 @@ export async function updateCategory(
 
 export async function setCategoryArchived(id: string, archived: boolean): Promise<void> {
   await updateDoc(doc(categoriesCol, id), { archivedAt: archived ? nowIso() : null });
+}
+
+/**
+ * Persist a hand-picked order for the postes. Renumbers the whole list to
+ * 0..n-1 in one batch rather than swapping two values: `sortOrder` starts life
+ * as `Date.now()`, so renumbering also normalises those away for good.
+ */
+export async function reorderCategories(orderedIds: string[]): Promise<void> {
+  const batch = writeBatch(db);
+  orderedIds.forEach((id, index) => {
+    batch.update(doc(categoriesCol, id), { sortOrder: index });
+  });
+  await batch.commit();
 }
 
 /**
@@ -171,6 +196,11 @@ export async function updateExpense(id: string, input: NewExpenseInput): Promise
 
 export async function softDeleteExpense(id: string): Promise<void> {
   await updateDoc(doc(expensesCol, id), { deletedAt: nowIso() });
+}
+
+/** Undo a soft delete — the balances refold on their own from the ledger. */
+export async function restoreExpense(id: string): Promise<void> {
+  await updateDoc(doc(expensesCol, id), { deletedAt: null });
 }
 
 /* ---- cashflow: recurring expenses & incomes ----------------------------- */

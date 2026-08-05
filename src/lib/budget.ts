@@ -205,6 +205,19 @@ export function expensesForMonth(dataset: Dataset, month: MonthKey): Expense[] {
     );
 }
 
+/**
+ * Soft-deleted expenses, most recently deleted first — the Corbeille. Deletion
+ * only sets `deletedAt`, so nothing is ever really lost; this is the list that
+ * makes those rows reachable again. Ordered by deletion time, not by expense
+ * date: what you want back is what you just removed by mistake.
+ */
+export function deletedExpenses(dataset: Dataset, limit = 20): Expense[] {
+  return dataset.expenses
+    .filter((e) => e.deletedAt)
+    .toSorted((a, b) => (b.deletedAt ?? "").localeCompare(a.deletedAt ?? ""))
+    .slice(0, limit);
+}
+
 /** A category holding expenses, and how many lines it holds. */
 export interface CategoryExpenseCount {
   category: Category;

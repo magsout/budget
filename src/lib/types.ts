@@ -5,6 +5,13 @@ export interface User {
   id: string;
   firstName: string;
   createdAt: string; // ISO timestamp
+  /**
+   * Set when the person is retired from the pickers. OPTIONAL on purpose: docs
+   * created before this field exists have no value, and `undefined` reads as
+   * active — so no migration is needed. Never hard-delete a user: expenses
+   * reference `userId` and would lose their author.
+   */
+  archivedAt?: string | null;
 }
 
 /** An expense category ("poste de dépenses"). */

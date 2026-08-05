@@ -3,6 +3,7 @@ import { useAuth } from "../../auth/AuthContext.tsx";
 import { Modal } from "../../components/Modal.tsx";
 import { useData } from "../../data/DataContext.tsx";
 import { avatarColorFor } from "../../lib/colors.ts";
+import { activeUsers } from "../../lib/users.ts";
 import { useCurrentUser } from "../../user/CurrentUserContext.tsx";
 
 const initialOf = (name: string) => name.charAt(0).toUpperCase();
@@ -19,6 +20,7 @@ export function AccountMenu({ onOpenConfig }: { onOpenConfig: () => void }) {
   const { dataset } = useData();
   const { currentUser, currentUserId, setCurrentUser } = useCurrentUser();
 
+  const users = activeUsers(dataset.users);
   const label = currentUser?.firstName ?? "Compte";
   const initial = currentUser ? initialOf(currentUser.firstName) : "?";
   // Deterministic per-user hue; falls back to the theme primary when nobody is picked.
@@ -44,10 +46,10 @@ export function AccountMenu({ onOpenConfig }: { onOpenConfig: () => void }) {
 
       {open && (
         <Modal title={label} onClose={() => setOpen(false)}>
-          {dataset.users.length > 1 && (
+          {users.length > 1 && (
             <div className="account-menu__section">
               <p className="account-menu__label">Changer de profil</p>
-              {dataset.users.map((u) => (
+              {users.map((u) => (
                 <button
                   key={u.id}
                   type="button"

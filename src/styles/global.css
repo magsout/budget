@@ -319,6 +319,22 @@ textarea.input {
   width: 100%;
 }
 
+/* Square icon button (reorder arrows) — keeps a comfortable tap target. */
+.btn--icon {
+  padding: 8px;
+  min-width: 38px;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+/* Trailing controls of a list row, kept on one line next to the label. */
+.list-item__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+}
+
 .btn--sm {
   padding: 6px 10px;
   font-size: 0.85rem;

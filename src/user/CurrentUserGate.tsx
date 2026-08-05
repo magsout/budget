@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { useData } from "../data/DataContext.tsx";
+import { activeUsers } from "../lib/users.ts";
 import { useCurrentUser } from "./CurrentUserContext.tsx";
 
 /**
@@ -21,7 +22,7 @@ export function CurrentUserGate({ children }: { children: ReactNode }) {
         <h1>Qui es-tu ?</h1>
         <p className="gate__hint">Choisis ton profil pour préremplir tes dépenses.</p>
         <div className="user-choices">
-          {dataset.users.map((u) => (
+          {activeUsers(dataset.users).map((u) => (
             <button
               key={u.id}
               type="button"
