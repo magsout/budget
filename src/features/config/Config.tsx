@@ -29,7 +29,8 @@ import {
   monthStateFor,
 } from "../../lib/budget.ts";
 import { avatarColorFor, DEFAULT_CATEGORY_COLOR } from "../../lib/colors.ts";
-import { currentMonth, formatDate, formatMonth, prevMonth } from "../../lib/dates.ts";
+import { currentMonth, formatDate, formatMonth, localToday, prevMonth } from "../../lib/dates.ts";
+import { datasetToJson, expensesToCsv, exportFileName } from "../../lib/export.ts";
 import { carryLabel } from "../../lib/labels.ts";
 import {
   centsToInput,
@@ -75,6 +76,7 @@ export function Config({ dataset }: { dataset: Dataset }) {
       />
       <UsersSection dataset={dataset} />
       <TrashSection dataset={dataset} />
+      <ExportSection dataset={dataset} />
       <p className="muted" style={{ textAlign: "center", marginTop: 8 }}>
         Modifier un montant s'applique à partir du mois courant ({formatMonth(currentMonth())}) ;
         les mois passés gardent leur valeur.
@@ -819,6 +821,52 @@ function CashflowRow({
       <button type="button" className="btn btn--ghost btn--sm" onClick={() => setEditing(true)}>
         Modifier
       </button>
+    </div>
+  );
+}
+
+/* ---- export ------------------------------------------------------------- */
+
+/** Hand a generated string to the browser as a file download. */
+function download(contents: string, extension: string, mime: string) {
+  const url = URL.createObjectURL(new Blob([contents], { type: `${mime};charset=utf-8` }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = exportFileName(extension, localToday());
+  link.click();
+  // Revoking immediately would race the download in some browsers.
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+/**
+ * Get the data back out. Everything lives in one Firestore project, so this is
+ * the only copy you can keep elsewhere. Built entirely in the browser from the
+ * dataset already in memory — no dependency, no server.
+ */
+function ExportSection({ dataset }: { dataset: Dataset }) {
+  return (
+    <div className="card">
+      <h3>Export</h3>
+      <p className="muted">
+        Une copie des données à garder ailleurs : le CSV s'ouvre dans un tableur, le JSON conserve
+        tout (postes, budgets, reports, revenus).
+      </p>
+      <div className="row">
+        <button
+          type="button"
+          className="btn"
+          onClick={() => download(expensesToCsv(dataset), "csv", "text/csv")}
+        >
+          Dépenses (CSV)
+        </button>
+        <button
+          type="button"
+          className="btn"
+          onClick={() => download(datasetToJson(dataset), "json", "application/json")}
+        >
+          Tout (JSON)
+        </button>
+      </div>
     </div>
   );
 }

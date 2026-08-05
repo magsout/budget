@@ -134,6 +134,25 @@ test.describe("Réglages", () => {
     await expect(postes.getByRole("button", { name: "Réactiver à zéro" })).toBeVisible();
   });
 
+  test("l'export CSV produit un fichier daté et non vide", async ({ page }) => {
+    await page.goto("fixture.html");
+    await openSettings(page);
+
+    // The DOM download plumbing is the one part unit tests cannot reach.
+    const [download] = await Promise.all([
+      page.waitForEvent("download"),
+      page.getByRole("button", { name: "Dépenses (CSV)" }).click(),
+    ]);
+
+    expect(download.suggestedFilename()).toMatch(/^budget-\d{4}-\d{2}-\d{2}\.csv$/);
+    const stream = await download.createReadStream();
+    const chunks: Buffer[] = [];
+    for await (const chunk of stream) chunks.push(chunk as Buffer);
+    const csv = Buffer.concat(chunks).toString("utf8");
+    expect(csv.split("\r\n")[0]).toBe("Date;Poste;Montant;Qui;Description;Supprimée");
+    expect(csv).toContain("Grosses courses");
+  });
+
   test("un profil retiré est hors des sélecteurs mais réactivable", async ({ page }) => {
     await page.goto("fixture.html");
     await openSettings(page);
