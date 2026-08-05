@@ -11,6 +11,9 @@
   --negative: #dc2626;
   --warning: #d97706;
   --radius: 14px;
+  /* Height of the fixed bottom nav, excluding the safe-area inset. Shared by
+     the bar, the page's bottom padding and the FAB's offset. */
+  --tabbar-h: 60px;
   --shadow: 0 1px 3px rgb(15 23 42 / 8%), 0 1px 2px rgb(15 23 42 / 6%);
   --maxw: 640px;
 }
@@ -82,7 +85,9 @@ code {
 .app {
   max-width: var(--maxw);
   margin: 0 auto;
-  padding: 16px 16px 96px;
+  /* Clear the fixed bottom bar (--tabbar-h) plus the iOS home indicator, so the
+     last row of a list is never trapped underneath it. */
+  padding: 16px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px);
 }
 
 .topbar {
@@ -122,31 +127,58 @@ code {
   }
 }
 
-.tabs {
-  display: flex;
-  gap: 6px;
+/* ---- bottom navigation --------------------------------------------------- */
+
+/* Full-bleed so it meets the screen edges; its items stay within --maxw like
+   the rest of the app. Below the modal (50) and the pull-to-refresh (40): the
+   expense sheet must cover it. */
+.tabbar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 30;
   background: var(--surface);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 5px;
-  margin-bottom: 16px;
-  box-shadow: var(--shadow);
+  border-top: 1px solid var(--border);
+  padding-bottom: env(safe-area-inset-bottom);
 }
 
-.tabs__btn {
+.tabbar__inner {
+  max-width: var(--maxw);
+  margin: 0 auto;
+  height: var(--tabbar-h);
+  display: flex;
+  align-items: stretch;
+}
+
+.tabbar__item {
   flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
   border: none;
-  background: transparent;
+  background: none;
   color: var(--text-muted);
-  padding: 9px 8px;
-  border-radius: 10px;
   font-weight: 600;
-  font-size: 0.92rem;
+  font-size: 0.68rem;
+  padding: 0 2px;
 }
 
-.tabs__btn--active {
-  background: var(--primary);
-  color: var(--primary-contrast);
+.tabbar__item svg {
+  width: 23px;
+  height: 23px;
+}
+
+.tabbar__item[aria-current="page"] {
+  color: var(--primary);
+}
+
+.tabbar__item:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -3px;
+  border-radius: 10px;
 }
 
 /* ---- cards & lists ------------------------------------------------------ */
@@ -341,21 +373,35 @@ textarea.input {
   border-radius: 8px;
 }
 
-/* Big floating "add expense" action */
+/* Round "add expense" action, riding just above the bottom bar. Only on the
+   Budget tab, so it stays tied to the screen it acts on. z-index sits under the
+   bar (30) but above page content. */
 .fab {
   position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: 20px;
-  width: min(var(--maxw), calc(100% - 32px));
-  padding: 16px;
-  font-size: 1.1rem;
-  font-weight: 700;
+  right: max(16px, calc(50vw - var(--maxw) / 2 + 16px));
+  bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 14px);
+  z-index: 29;
+  width: 54px;
+  height: 54px;
   border: none;
-  border-radius: 16px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
   background: var(--primary);
   color: var(--primary-contrast);
-  box-shadow: 0 8px 24px rgb(37 99 235 / 35%);
+  box-shadow: 0 8px 22px rgb(37 99 235 / 38%);
+}
+
+.fab svg {
+  width: 26px;
+  height: 26px;
+}
+
+/* Only the tab that owns the FAB pays for it: extra scroll room so the last
+   row comes to rest ABOVE the button. Content still passes under it while
+   scrolling — that part is expected — but nothing is stranded there. */
+.has-fab {
+  padding-bottom: 66px;
 }
 
 /* ---- pull to refresh ---------------------------------------------------- */

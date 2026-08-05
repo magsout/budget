@@ -32,8 +32,44 @@ test.describe("Budget", () => {
 
     await expect(page.getByText("Reste ce mois")).toBeVisible();
     await expect(page.getByRole("button", { name: /Courses/ }).first()).toBeVisible();
-    await expect(page.getByRole("button", { name: "+ Ajouter une dépense" })).toBeVisible();
+    await expect(
+      page.getByRole("button", { name: "Ajouter une dépense", exact: true }),
+    ).toBeVisible();
     expect(errors).toEqual([]);
+  });
+
+  test("la barre du bas marque l'onglet actif et navigue", async ({ page }) => {
+    await page.goto("fixture.html");
+
+    const bar = page.locator(".tabbar");
+    await expect(bar).toBeVisible();
+    await expect(bar.getByRole("button", { name: "Budget" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+
+    await bar.getByRole("button", { name: "Compte" }).click();
+    await expect(bar.getByRole("button", { name: "Compte" })).toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    await expect(bar.getByRole("button", { name: "Budget" })).not.toHaveAttribute(
+      "aria-current",
+      "page",
+    );
+    // The add button belongs to the Budget tab only.
+    await expect(
+      page.getByRole("button", { name: "Ajouter une dépense", exact: true }),
+    ).toHaveCount(0);
+  });
+
+  test("la barre s'efface sur Réglages et revient au retour", async ({ page }) => {
+    await page.goto("fixture.html");
+    await openSettings(page);
+    await expect(page.locator(".tabbar")).toHaveCount(0);
+
+    await page.getByRole("button", { name: "Retour" }).click();
+    await expect(page.locator(".tabbar")).toBeVisible();
   });
 
   test("le poste archivé n'apparaît pas dans le mois courant", async ({ page }) => {
@@ -74,7 +110,7 @@ test.describe("Budget", () => {
 
   test("un raccourci fréquent préremplit le formulaire en un tap", async ({ page }) => {
     await page.goto("fixture.html");
-    await page.getByRole("button", { name: "+ Ajouter une dépense" }).click();
+    await page.getByRole("button", { name: "Ajouter une dépense", exact: true }).click();
 
     await expect(page.locator("#amount")).toHaveValue("");
     await page.getByRole("button", { name: /Boulangerie/ }).click();
@@ -176,7 +212,7 @@ test.describe("Réglages", () => {
 
     // The retired profile must not be offered when logging an expense.
     await page.getByRole("button", { name: "Retour" }).click();
-    await page.getByRole("button", { name: "+ Ajouter une dépense" }).click();
+    await page.getByRole("button", { name: "Ajouter une dépense", exact: true }).click();
     const who = page.locator("#user");
     await expect(who.getByRole("option")).toHaveCount(2);
     await expect(who.getByRole("option", { name: "Colocataire" })).toHaveCount(0);

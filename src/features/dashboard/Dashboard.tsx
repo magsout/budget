@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { CategoryFilter } from "../../components/CategoryFilter.tsx";
+import { PlusIcon } from "../../components/icons.tsx";
 import {
   expensesForMonth,
   filterExpensesByCategory,
@@ -41,7 +42,7 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
   const userName = (id: string) => dataset.users.find((u) => u.id === id)?.firstName ?? "—";
 
   return (
-    <div>
+    <div className="has-fab">
       <div className="card">
         <div className="summary">
           <div>
@@ -176,8 +177,14 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
         </div>
       )}
 
-      <button type="button" className="fab" onClick={() => setForm({ mode: "create" })}>
-        + Ajouter une dépense
+      {/* Icon-only, so the label has to come from aria-label. */}
+      <button
+        type="button"
+        className="fab"
+        aria-label="Ajouter une dépense"
+        onClick={() => setForm({ mode: "create" })}
+      >
+        <PlusIcon />
       </button>
 
       {form && (

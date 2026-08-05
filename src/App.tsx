@@ -1,4 +1,6 @@
 import { useState } from "react";
+import { BottomNav, type NavTab } from "./components/BottomNav.tsx";
+import { BudgetIcon, CompteIcon, HistoriqueIcon } from "./components/icons.tsx";
 import { useData } from "./data/DataContext.tsx";
 import { Account } from "./features/account/Account.tsx";
 import { Config } from "./features/config/Config.tsx";
@@ -10,10 +12,10 @@ import { PullToRefresh } from "./pwa/PullToRefresh.tsx";
 
 type Tab = "dashboard" | "history" | "account";
 
-const TABS: { id: Tab; label: string }[] = [
-  { id: "dashboard", label: "Budget" },
-  { id: "history", label: "Historique" },
-  { id: "account", label: "Compte" },
+const TABS: NavTab<Tab>[] = [
+  { id: "dashboard", label: "Budget", icon: <BudgetIcon /> },
+  { id: "history", label: "Historique", icon: <HistoriqueIcon /> },
+  { id: "account", label: "Compte", icon: <CompteIcon /> },
 ];
 
 export function App() {
@@ -64,19 +66,6 @@ export function App() {
               </div>
             </div>
 
-            <nav className="tabs">
-              {TABS.map((t) => (
-                <button
-                  type="button"
-                  key={t.id}
-                  className={`tabs__btn ${tab === t.id ? "tabs__btn--active" : ""}`}
-                  onClick={() => setTab(t.id)}
-                >
-                  {t.label}
-                </button>
-              ))}
-            </nav>
-
             <InstallBanner />
 
             {error && <div className="card gate__error">Erreur de synchronisation : {error}</div>}
@@ -90,6 +79,10 @@ export function App() {
             ) : (
               <Account dataset={dataset} />
             )}
+
+            {/* Réglages is a sub-page, not a tab: it owns a « ‹ Retour » button
+                and no tab could legitimately be marked active there. */}
+            <BottomNav tabs={TABS} active={tab} onChange={setTab} />
           </>
         )}
       </div>
