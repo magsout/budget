@@ -1,10 +1,10 @@
 /**
- * Free-text search over a month's expenses, on amount and date.
+ * Free-text search over a month's expenses: amount, date and description.
  *
- * One field rather than two: a query is matched against everything an expense
- * can be recognised by, and several terms are ANDed — so "42" narrows by
- * amount, "7 août" by date, and "42 août" by both at once. That covers the
- * "montant et/ou date" case without asking which field you meant.
+ * One field rather than several: a query is matched against everything an
+ * expense can be recognised by, and several terms are ANDed — so "42" narrows
+ * by amount, "7 août" by date, "carrefour" by description, and "42 carrefour"
+ * by two of them at once, without asking which field you meant.
  */
 import { formatDate, formatMonth, monthOf } from "./dates.ts";
 import { centsToInput } from "./money.ts";
@@ -19,9 +19,9 @@ function normalize(value: string): string {
 }
 
 /**
- * Every written form of an expense's amount and date, concatenated. Built to be
- * forgiving: 42,50 is found by "42", "42,5" or "42.50", and the 7th of August
- * by "7", "07/08", "7/8" or "7 aout".
+ * Every written form of an expense's amount, date and description,
+ * concatenated. Built to be forgiving: 42,50 is found by "42", "42,5" or
+ * "42.50", and the 7th of August by "7", "07/08", "7/8" or "7 aout".
  */
 function haystack(expense: Expense): string {
   const amount = centsToInput(expense.amountCents); // "42,50"
@@ -37,6 +37,7 @@ function haystack(expense: Expense): string {
       `${Number(day)}/${Number(month)}`, // 7/8, without the padding
       formatDate(expense.date), // 7 sept. 2026 — abbreviated month
       formatMonth(monthOf(expense.date)), // Septembre 2026 — spelled out
+      expense.description ?? "",
     ].join(" "),
   );
 }

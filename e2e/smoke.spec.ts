@@ -143,7 +143,7 @@ test.describe("Budget", () => {
   test("la recherche filtre par montant, par date, ou les deux", async ({ page }) => {
     await page.goto("fixture.html");
     const search = page.getByRole("searchbox", {
-      name: "Rechercher une dépense par montant ou par date",
+      name: "Rechercher une dépense par montant, date ou description",
     });
     const rows = page.locator(".list-item--btn");
     await expect(rows).toHaveCount(5);
@@ -162,6 +162,11 @@ test.describe("Budget", () => {
     await expect(rows).toHaveCount(1);
     await expect(rows.first()).toContainText("42,50");
 
+    // And by description.
+    await search.fill("cinema");
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText("Cinéma");
+
     await search.fill("999");
     await expect(rows).toHaveCount(0);
     await expect(page.getByText("Aucune dépense ne correspond")).toBeVisible();
@@ -176,7 +181,7 @@ test.describe("Budget", () => {
 
     // August has every expense, so the chips stay — but Courses drops to 2.
     await page
-      .getByRole("searchbox", { name: "Rechercher une dépense par montant ou par date" })
+      .getByRole("searchbox", { name: "Rechercher une dépense par montant, date ou description" })
       .fill("aout");
     await expect(page.getByRole("button", { name: "Tous (5)" })).toBeVisible();
     await expect(page.getByRole("button", { name: "Courses (3)" })).toBeVisible();
@@ -228,6 +233,17 @@ test.describe("Historique", () => {
 
     await page.getByRole("button", { name: "Courses (2)" }).click();
     await expect(list.locator(".list-item")).toHaveCount(2);
+  });
+
+  test("la recherche s'applique aussi au mois passé", async ({ page }) => {
+    const list = page.locator(".card").filter({ hasText: "Dépenses" }).last();
+    await expect(list.locator(".list-item")).toHaveCount(4);
+
+    await page
+      .getByRole("searchbox", { name: "Rechercher une dépense par montant, date ou description" })
+      .fill("restaurant");
+    await expect(list.locator(".list-item")).toHaveCount(1);
+    await expect(list.locator(".list-item").first()).toContainText("245,00");
   });
 
   test("déplier un poste montre sa tendance sur plusieurs mois", async ({ page }) => {

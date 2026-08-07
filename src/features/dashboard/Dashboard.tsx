@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { CategoryFilter } from "../../components/CategoryFilter.tsx";
+import { ExpenseSearch } from "../../components/ExpenseSearch.tsx";
 import { PlusIcon } from "../../components/icons.tsx";
 import {
   expensesForMonth,
@@ -154,15 +155,7 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
       {expenses.length > 0 && (
         <div className="card">
           <h3>Dépenses du mois</h3>
-          <input
-            type="search"
-            className="input"
-            style={{ marginBottom: 12 }}
-            placeholder="Rechercher : 42,50 · 7/8 · août"
-            aria-label="Rechercher une dépense par montant ou par date"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-          />
+          <ExpenseSearch value={query} onChange={setQuery} />
           <CategoryFilter
             expenses={found}
             categories={dataset.categories}

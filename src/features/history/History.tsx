@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { CategoryFilter } from "../../components/CategoryFilter.tsx";
+import { ExpenseSearch } from "../../components/ExpenseSearch.tsx";
 import {
   availableMonths,
   expensesForMonth,
@@ -12,6 +13,7 @@ import {
 import { currentMonth, formatDate, formatMonth, prevMonth } from "../../lib/dates.ts";
 import { carryLabel } from "../../lib/labels.ts";
 import { formatCents } from "../../lib/money.ts";
+import { searchExpenses } from "../../lib/search.ts";
 import type { Category, Dataset } from "../../lib/types.ts";
 
 /** How many months of history a poste's trend shows when expanded. */
@@ -27,6 +29,9 @@ export function History({ dataset }: { dataset: Dataset }) {
 
   const [selected, setSelected] = useState(months[0] ?? "");
   const [filter, setFilter] = useState<string | null>(null);
+  // Kept across month changes on purpose: the same query on another month is
+  // how you find where else an amount turned up.
+  const [query, setQuery] = useState("");
 
   if (months.length === 0) {
     return <div className="card empty">Aucun mois archivé pour l'instant.</div>;
@@ -35,7 +40,10 @@ export function History({ dataset }: { dataset: Dataset }) {
   const month = months.includes(selected) ? selected : months[0];
   const summary = monthSummary(dataset, month);
   const expenses = expensesForMonth(dataset, month);
-  const visibleExpenses = filterExpensesByCategory(expenses, filter);
+  // Search first, then the poste chips, so their counts describe what the
+  // search actually left (same order as the Budget tab).
+  const found = searchExpenses(expenses, query);
+  const visibleExpenses = filterExpensesByCategory(found, filter);
   const total = totalRemaining(dataset, month);
 
   const categoryName = (id: string) => dataset.categories.find((c) => c.id === id)?.name ?? "—";
@@ -80,12 +88,16 @@ export function History({ dataset }: { dataset: Dataset }) {
       {expenses.length > 0 && (
         <div className="card">
           <h3>Dépenses</h3>
+          <ExpenseSearch value={query} onChange={setQuery} />
           <CategoryFilter
-            expenses={expenses}
+            expenses={found}
             categories={dataset.categories}
             value={filter}
             onChange={setFilter}
           />
+          {visibleExpenses.length === 0 && (
+            <p className="muted">Aucune dépense ne correspond à cette recherche.</p>
+          )}
           {visibleExpenses.map((e) => (
             <div className="list-item" key={e.id}>
               <div>

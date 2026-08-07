@@ -2,13 +2,18 @@ import { describe, expect, it } from "vitest";
 import { searchExpenses } from "../src/lib/search.ts";
 import type { Expense } from "../src/lib/types.ts";
 
-function exp(id: string, amountCents: number, date: string): Expense {
+function exp(
+  id: string,
+  amountCents: number,
+  date: string,
+  description: string | null = null,
+): Expense {
   return {
     id,
     categoryId: "c",
     userId: "u",
     amountCents,
-    description: null,
+    description,
     date,
     createdAt: `${date}T12:00:00.000Z`,
     deletedAt: null,
@@ -57,6 +62,33 @@ describe("searchExpenses — date", () => {
 
   it("trouve par date ISO", () => {
     expect(ids(searchExpenses(rows, "2026-09"))).toEqual(["d"]);
+  });
+});
+
+describe("searchExpenses — description", () => {
+  const withDesc = [
+    exp("a", 4250, "2026-08-07", "Carrefour"),
+    exp("b", 12300, "2026-08-18", "Café du marché"),
+    exp("c", 650, "2026-08-07", null),
+  ];
+
+  it("trouve par description, sans casse", () => {
+    expect(ids(searchExpenses(withDesc, "carrefour"))).toEqual(["a"]);
+    expect(ids(searchExpenses(withDesc, "CARREFOUR"))).toEqual(["a"]);
+  });
+
+  it("trouve par fragment, accent ignoré", () => {
+    expect(ids(searchExpenses(withDesc, "marche"))).toEqual(["b"]);
+    expect(ids(searchExpenses(withDesc, "café"))).toEqual(["b"]);
+  });
+
+  it("ignore sereinement une description absente", () => {
+    expect(ids(searchExpenses(withDesc, "6,50"))).toEqual(["c"]);
+  });
+
+  it("croise description et montant", () => {
+    expect(ids(searchExpenses(withDesc, "carrefour 42"))).toEqual(["a"]);
+    expect(ids(searchExpenses(withDesc, "carrefour 123"))).toEqual([]);
   });
 });
 
