@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { BottomNav, type NavTab } from "./components/BottomNav.tsx";
-import { BudgetIcon, CompteIcon, HistoriqueIcon } from "./components/icons.tsx";
+import { BudgetIcon, ChevronLeftIcon, CompteIcon, HistoriqueIcon } from "./components/icons.tsx";
 import { useData } from "./data/DataContext.tsx";
 import { Account } from "./features/account/Account.tsx";
 import { Config } from "./features/config/Config.tsx";
@@ -46,7 +46,8 @@ export function App() {
                 onClick={() => setConfigOpen(false)}
                 aria-label="Retour"
               >
-                ‹ Retour
+                <ChevronLeftIcon />
+                Retour
               </button>
               <span className="topbar__title">Réglages</span>
               <span className="topbar__sub-spacer" aria-hidden />

@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { ChevronLeftIcon, ChevronRightIcon } from "../../components/icons.tsx";
 import {
   accountSummary,
   type CategoryBudgetLine,
@@ -33,7 +34,7 @@ export function Account({ dataset }: { dataset: Dataset }) {
           onClick={() => setMonth((m) => prevMonth(m))}
           aria-label="Mois précédent"
         >
-          ‹
+          <ChevronLeftIcon />
         </button>
         <span className="month-nav__label">{formatMonth(month)}</span>
         <button
@@ -42,7 +43,7 @@ export function Account({ dataset }: { dataset: Dataset }) {
           onClick={() => setMonth((m) => nextMonth(m))}
           aria-label="Mois suivant"
         >
-          ›
+          <ChevronRightIcon />
         </button>
       </div>
 

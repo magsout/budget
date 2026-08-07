@@ -229,6 +229,44 @@ body:has(.tabbar__slot) .app {
   color: var(--text-muted);
 }
 
+/* ---- inline icon sizing -------------------------------------------------- */
+
+/* An SVG with only a viewBox has no intrinsic size — left alone it would lay
+   out at 300x150. Every context that holds one sets it here, general first so
+   the specific rules below can override on equal specificity. */
+.btn svg,
+.account-menu__row-main svg,
+.list-item--btn > svg {
+  width: 18px;
+  height: 18px;
+  flex: none;
+}
+
+.btn--icon svg {
+  width: 17px;
+  height: 17px;
+}
+
+.month-nav__btn svg {
+  width: 20px;
+  height: 20px;
+}
+
+.account-trigger__caret svg {
+  width: 15px;
+  height: 15px;
+}
+
+.ptr__badge svg {
+  width: 20px;
+  height: 20px;
+}
+
+.install__icon svg {
+  width: 22px;
+  height: 22px;
+}
+
 /* ---- cards & lists ------------------------------------------------------ */
 
 .card {
@@ -390,6 +428,10 @@ textarea.input {
 }
 
 .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
   border: 1px solid var(--border);
   background: var(--surface);
   color: var(--text);
@@ -500,6 +542,7 @@ textarea.input {
 }
 
 .ptr__badge {
+  color: var(--primary);
   margin-top: 6px;
   width: 38px;
   height: 38px;
@@ -539,6 +582,8 @@ textarea.input {
 }
 
 .install__icon {
+  display: flex;
+  color: var(--primary);
   font-size: 1.4rem;
   line-height: 1;
 }

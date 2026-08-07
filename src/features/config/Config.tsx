@@ -1,5 +1,11 @@
 import { type FormEvent, useId, useState } from "react";
 import { ColorSwatchPicker } from "../../components/ColorSwatchPicker.tsx";
+import {
+  ArrowDownIcon,
+  ArrowUpIcon,
+  ChevronDownIcon,
+  ChevronRightIcon,
+} from "../../components/icons.tsx";
 import { useData } from "../../data/DataContext.tsx";
 import {
   addCategory,
@@ -353,7 +359,7 @@ function CategoryRow({
               disabled={isFirst}
               aria-label={`Monter ${category.name}`}
             >
-              ↑
+              <ArrowUpIcon />
             </button>
             <button
               type="button"
@@ -362,7 +368,7 @@ function CategoryRow({
               disabled={isLast}
               aria-label={`Descendre ${category.name}`}
             >
-              ↓
+              <ArrowDownIcon />
             </button>
           </>
         )}
@@ -395,7 +401,7 @@ function ArchivedCategories({ dataset }: { dataset: Dataset }) {
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
       >
-        {open ? "▾" : "▸"} Postes archivés ({archived.length})
+        {open ? <ChevronDownIcon /> : <ChevronRightIcon />} Postes archivés ({archived.length})
       </button>
       {open &&
         archived.map((c) => <ArchivedCategoryRow key={c.id} category={c} dataset={dataset} />)}

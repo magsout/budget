@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect } from "react";
+import { CloseIcon } from "./icons.tsx";
 
 interface ModalProps {
   title: string;
@@ -32,7 +33,7 @@ export function Modal({ title, onClose, children }: ModalProps) {
             onClick={onClose}
             aria-label="Fermer"
           >
-            ✕
+            <CloseIcon />
           </button>
         </div>
         {children}

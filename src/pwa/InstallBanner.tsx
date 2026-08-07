@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { CloseIcon, InstallIcon } from "../components/icons.tsx";
 import { useInstallPrompt } from "./useInstallPrompt.ts";
 
 const DISMISS_KEY = "budget:installDismissed";
@@ -18,8 +19,8 @@ export function InstallBanner() {
 
   return (
     <div className="install">
-      <span className="install__icon" aria-hidden="true">
-        🐷
+      <span className="install__icon">
+        <InstallIcon />
       </span>
       {canPrompt ? (
         <>
@@ -39,7 +40,7 @@ export function InstallBanner() {
         onClick={dismiss}
         aria-label="Masquer"
       >
-        ✕
+        <CloseIcon />
       </button>
     </div>
   );

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useAuth } from "../../auth/AuthContext.tsx";
 import { Modal } from "../../components/Modal.tsx";
 import { useData } from "../../data/DataContext.tsx";
+import { CheckIcon, ChevronDownIcon, PowerIcon, SettingsIcon } from "../../components/icons.tsx";
 import { avatarColorFor } from "../../lib/colors.ts";
 import { activeUsers } from "../../lib/users.ts";
 import { useCurrentUser } from "../../user/CurrentUserContext.tsx";
@@ -39,8 +40,8 @@ export function AccountMenu({ onOpenConfig }: { onOpenConfig: () => void }) {
           {initial}
         </span>
         <span className="account-trigger__name">{label}</span>
-        <span className="account-trigger__caret" aria-hidden>
-          ▾
+        <span className="account-trigger__caret">
+          <ChevronDownIcon />
         </span>
       </button>
 
@@ -69,7 +70,7 @@ export function AccountMenu({ onOpenConfig }: { onOpenConfig: () => void }) {
                     </span>
                     {u.firstName}
                   </span>
-                  {u.id === currentUserId && <span aria-hidden>✓</span>}
+                  {u.id === currentUserId && <CheckIcon />}
                 </button>
               ))}
             </div>
@@ -84,14 +85,20 @@ export function AccountMenu({ onOpenConfig }: { onOpenConfig: () => void }) {
                 onOpenConfig();
               }}
             >
-              <span>⚙ Réglages</span>
+              <span className="account-menu__row-main">
+                <SettingsIcon />
+                Réglages
+              </span>
             </button>
             <button
               type="button"
               className="list-item list-item--btn account-menu__danger"
               onClick={() => signOut()}
             >
-              <span>⏻ Déconnexion</span>
+              <span className="account-menu__row-main">
+                <PowerIcon />
+                Déconnexion
+              </span>
             </button>
           </div>
         </Modal>

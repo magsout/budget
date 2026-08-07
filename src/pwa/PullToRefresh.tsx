@@ -1,4 +1,5 @@
 import { type ReactNode, useEffect, useRef, useState } from "react";
+import { RefreshIcon } from "../components/icons.tsx";
 import { isStandalone } from "./standalone.ts";
 import { useRefreshOnResume } from "./useRefreshOnResume.ts";
 
@@ -93,7 +94,7 @@ export function PullToRefresh({ children }: { children: ReactNode }) {
               opacity: refreshing ? 1 : progress,
             }}
           >
-            ↻
+            <RefreshIcon />
           </div>
         </div>
       )}
