@@ -12,6 +12,7 @@ import { avatarColorFor } from "../../lib/colors.ts";
 import { currentMonth, formatDate, formatMonth } from "../../lib/dates.ts";
 import { carryLabel } from "../../lib/labels.ts";
 import { formatCents } from "../../lib/money.ts";
+import { searchExpenses } from "../../lib/search.ts";
 import type { Dataset, Expense } from "../../lib/types.ts";
 import { ExpenseForm } from "../expense/ExpenseForm.tsx";
 
@@ -31,11 +32,17 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
   const [form, setForm] = useState<FormState>(null);
   /** Poste filtering the month's expense list; null = tous. */
   const [filter, setFilter] = useState<string | null>(null);
+  /** Free-text search over amounts and dates. */
+  const [query, setQuery] = useState("");
 
   const summary = useMemo(() => monthSummary(dataset, month), [dataset, month]);
   const total = useMemo(() => totalRemaining(dataset, month), [dataset, month]);
   const expenses = useMemo(() => expensesForMonth(dataset, month), [dataset, month]);
-  const visibleExpenses = filterExpensesByCategory(expenses, filter);
+
+  // Search first, then the poste chips — so the counts on the chips describe
+  // what the search actually left, instead of promising rows it filtered out.
+  const found = useMemo(() => searchExpenses(expenses, query), [expenses, query]);
+  const visibleExpenses = filterExpensesByCategory(found, filter);
   const perUser = useMemo(() => spendByUser(expenses, dataset.users), [expenses, dataset.users]);
 
   const categoryName = (id: string) => dataset.categories.find((c) => c.id === id)?.name ?? "—";
@@ -147,12 +154,24 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
       {expenses.length > 0 && (
         <div className="card">
           <h3>Dépenses du mois</h3>
+          <input
+            type="search"
+            className="input"
+            style={{ marginBottom: 12 }}
+            placeholder="Rechercher : 42,50 · 7/8 · août"
+            aria-label="Rechercher une dépense par montant ou par date"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+          />
           <CategoryFilter
-            expenses={expenses}
+            expenses={found}
             categories={dataset.categories}
             value={filter}
             onChange={setFilter}
           />
+          {visibleExpenses.length === 0 && (
+            <p className="muted">Aucune dépense ne correspond à cette recherche.</p>
+          )}
           {visibleExpenses.map((e) => (
             <button
               type="button"

@@ -75,18 +75,23 @@ test.describe("Budget", () => {
 
   test("taper un onglet remonte en haut de page", async ({ page }) => {
     await page.goto("fixture.html");
+    const tabs = page.locator(".tabbar__item");
+    const scrollY = () => page.evaluate("window.scrollY");
+    // Both halves scroll on Budget: it is the only tab tall enough to give the
+    // wheel real travel, so the assertions aren't measuring a few stray pixels.
+
+    // Tapping the tab you are already on is "back to top".
     await page.mouse.wheel(0, 600);
-    await expect.poll(() => page.evaluate("window.scrollY")).toBeGreaterThan(0);
+    await expect.poll(scrollY).toBeGreaterThan(0);
+    await tabs.nth(0).click();
+    await expect.poll(scrollY).toBe(0);
 
     // Switching tabs: the next screen must not open mid-page.
-    await page.locator(".tabbar__item").nth(2).click();
-    await expect.poll(() => page.evaluate("window.scrollY")).toBe(0);
-
-    // And tapping the tab you are already on is "back to top".
-    await page.mouse.wheel(0, 400);
-    await expect.poll(() => page.evaluate("window.scrollY")).toBeGreaterThan(0);
-    await page.locator(".tabbar__item").nth(2).click();
-    await expect.poll(() => page.evaluate("window.scrollY")).toBe(0);
+    await page.mouse.wheel(0, 600);
+    await expect.poll(scrollY).toBeGreaterThan(0);
+    await tabs.nth(1).click();
+    await expect.poll(scrollY).toBe(0);
+    await expect(tabs.nth(1)).toHaveAttribute("aria-current", "page");
   });
 
   test("le slot du mini-player s'affiche dans le conteneur flottant", async ({ page }) => {
@@ -133,6 +138,48 @@ test.describe("Budget", () => {
 
     await page.getByRole("button", { name: "Tous (5)" }).click();
     await expect(rows).toHaveCount(5);
+  });
+
+  test("la recherche filtre par montant, par date, ou les deux", async ({ page }) => {
+    await page.goto("fixture.html");
+    const search = page.getByRole("searchbox", {
+      name: "Rechercher une dépense par montant ou par date",
+    });
+    const rows = page.locator(".list-item--btn");
+    await expect(rows).toHaveCount(5);
+
+    await search.fill("65");
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText("65,10");
+
+    // A date, in the day/month form.
+    await search.fill("7/8");
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText("7 août");
+
+    // Two terms are ANDed: amount AND month.
+    await search.fill("42 aout");
+    await expect(rows).toHaveCount(1);
+    await expect(rows.first()).toContainText("42,50");
+
+    await search.fill("999");
+    await expect(rows).toHaveCount(0);
+    await expect(page.getByText("Aucune dépense ne correspond")).toBeVisible();
+
+    await search.fill("");
+    await expect(rows).toHaveCount(5);
+  });
+
+  test("les compteurs de postes suivent la recherche", async ({ page }) => {
+    await page.goto("fixture.html");
+    await expect(page.getByRole("button", { name: "Tous (5)" })).toBeVisible();
+
+    // August has every expense, so the chips stay — but Courses drops to 2.
+    await page
+      .getByRole("searchbox", { name: "Rechercher une dépense par montant ou par date" })
+      .fill("aout");
+    await expect(page.getByRole("button", { name: "Tous (5)" })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Courses (3)" })).toBeVisible();
   });
 
   test("la répartition par personne totalise chaque profil", async ({ page }) => {
