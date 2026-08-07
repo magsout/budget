@@ -340,6 +340,28 @@ textarea.input {
   font-size: 1rem;
 }
 
+/* Search field with a leading magnifier. The icon is decorative and must not
+   swallow the tap that should focus the input. */
+.search {
+  position: relative;
+  margin-bottom: 12px;
+}
+
+.search svg {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.search__input {
+  padding-left: 38px;
+}
+
 .input:focus,
 .select:focus {
   outline: 2px solid var(--primary);
@@ -405,6 +427,18 @@ textarea.input {
   min-width: 38px;
   font-size: 1rem;
   line-height: 1;
+}
+
+/* The "this row is editable" affordance at the end of an expense row. */
+.list-item__edit {
+  flex: none;
+  display: flex;
+  color: var(--text-muted);
+}
+
+.list-item__edit svg {
+  width: 18px;
+  height: 18px;
 }
 
 /* Trailing controls of a list row, kept on one line next to the label. */

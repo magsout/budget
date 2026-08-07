@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { CategoryFilter } from "../../components/CategoryFilter.tsx";
 import { ExpenseSearch } from "../../components/ExpenseSearch.tsx";
-import { PlusIcon } from "../../components/icons.tsx";
+import { PencilIcon, PlusIcon } from "../../components/icons.tsx";
 import {
   expensesForMonth,
   filterExpensesByCategory,
@@ -181,8 +181,8 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
                   {e.description ? ` · ${e.description}` : ""}
                 </div>
               </div>
-              <span className="muted" aria-hidden="true">
-                ✏️
+              <span className="list-item__edit">
+                <PencilIcon />
               </span>
             </button>
           ))}

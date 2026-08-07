@@ -1,3 +1,5 @@
+import { SearchIcon } from "./icons.tsx";
+
 interface Props {
   value: string;
   onChange: (query: string) => void;
@@ -13,14 +15,16 @@ interface Props {
  */
 export function ExpenseSearch({ value, onChange }: Props) {
   return (
-    <input
-      type="search"
-      className="input"
-      style={{ marginBottom: 12 }}
-      placeholder="Rechercher : 42,50 · 7/8 · Carrefour"
-      aria-label="Rechercher une dépense par montant, date ou description"
-      value={value}
-      onChange={(e) => onChange(e.target.value)}
-    />
+    <div className="search">
+      <SearchIcon />
+      <input
+        type="search"
+        className="input search__input"
+        placeholder="Rechercher : 42,50 · 7/8 · Carrefour"
+        aria-label="Rechercher une dépense par montant, date ou description"
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+      />
+    </div>
   );
 }
