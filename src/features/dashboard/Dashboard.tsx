@@ -1,19 +1,11 @@
 import { useMemo, useState } from "react";
-import { CategoryFilter } from "../../components/CategoryFilter.tsx";
-import { ExpenseSearch } from "../../components/ExpenseSearch.tsx";
-import { PencilIcon, PlusIcon } from "../../components/icons.tsx";
-import {
-  expensesForMonth,
-  filterExpensesByCategory,
-  monthSummary,
-  spendByUser,
-  totalRemaining,
-} from "../../lib/budget.ts";
+import { ExpenseList } from "../../components/ExpenseList.tsx";
+import { PlusIcon } from "../../components/icons.tsx";
+import { expensesForMonth, monthSummary, spendByUser, totalRemaining } from "../../lib/budget.ts";
 import { avatarColorFor } from "../../lib/colors.ts";
-import { currentMonth, formatDate, formatMonth } from "../../lib/dates.ts";
+import { currentMonth, formatMonth } from "../../lib/dates.ts";
 import { carryLabel } from "../../lib/labels.ts";
 import { formatCents } from "../../lib/money.ts";
-import { searchExpenses } from "../../lib/search.ts";
 import type { Dataset, Expense } from "../../lib/types.ts";
 import { ExpenseForm } from "../expense/ExpenseForm.tsx";
 
@@ -31,23 +23,11 @@ function remainingClass(remaining: number, starting: number): string {
 export function Dashboard({ dataset }: { dataset: Dataset }) {
   const month = currentMonth();
   const [form, setForm] = useState<FormState>(null);
-  /** Poste filtering the month's expense list; null = tous. */
-  const [filter, setFilter] = useState<string | null>(null);
-  /** Free-text search over amounts and dates. */
-  const [query, setQuery] = useState("");
 
   const summary = useMemo(() => monthSummary(dataset, month), [dataset, month]);
   const total = useMemo(() => totalRemaining(dataset, month), [dataset, month]);
   const expenses = useMemo(() => expensesForMonth(dataset, month), [dataset, month]);
-
-  // Search first, then the poste chips — so the counts on the chips describe
-  // what the search actually left, instead of promising rows it filtered out.
-  const found = useMemo(() => searchExpenses(expenses, query), [expenses, query]);
-  const visibleExpenses = filterExpensesByCategory(found, filter);
   const perUser = useMemo(() => spendByUser(expenses, dataset.users), [expenses, dataset.users]);
-
-  const categoryName = (id: string) => dataset.categories.find((c) => c.id === id)?.name ?? "—";
-  const userName = (id: string) => dataset.users.find((u) => u.id === id)?.firstName ?? "—";
 
   return (
     <div className="has-fab">
@@ -155,37 +135,12 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
       {expenses.length > 0 && (
         <div className="card">
           <h3>Dépenses du mois</h3>
-          <ExpenseSearch value={query} onChange={setQuery} />
-          <CategoryFilter
-            expenses={found}
+          <ExpenseList
+            expenses={expenses}
             categories={dataset.categories}
-            value={filter}
-            onChange={setFilter}
+            users={dataset.users}
+            onEdit={(expense) => setForm({ mode: "edit", expense })}
           />
-          {visibleExpenses.length === 0 && (
-            <p className="muted">Aucune dépense ne correspond à cette recherche.</p>
-          )}
-          {visibleExpenses.map((e) => (
-            <button
-              type="button"
-              key={e.id}
-              className="list-item list-item--btn"
-              onClick={() => setForm({ mode: "edit", expense: e })}
-            >
-              <div>
-                <div>
-                  <strong>{formatCents(e.amountCents)}</strong> · {categoryName(e.categoryId)}
-                </div>
-                <div className="muted">
-                  {formatDate(e.date)} · {userName(e.userId)}
-                  {e.description ? ` · ${e.description}` : ""}
-                </div>
-              </div>
-              <span className="list-item__edit">
-                <PencilIcon />
-              </span>
-            </button>
-          ))}
         </div>
       )}
 

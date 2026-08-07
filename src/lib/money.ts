@@ -14,12 +14,24 @@ export function eurosToCents(input: string | number): number {
   return Math.round(value * 100);
 }
 
+/**
+ * Formatters are cached per locale: building an `Intl.NumberFormat` costs far
+ * more than the formatting itself, and these run once per row on every render.
+ */
+const currencyFormatters = new Map<string, Intl.NumberFormat>();
+
+function currencyFormatter(locale: string): Intl.NumberFormat {
+  let formatter = currencyFormatters.get(locale);
+  if (!formatter) {
+    formatter = new Intl.NumberFormat(locale, { style: "currency", currency: "EUR" });
+    currencyFormatters.set(locale, formatter);
+  }
+  return formatter;
+}
+
 /** Format integer cents as a localized euro string, e.g. -35012 -> "-350,12 €". */
 export function formatCents(cents: number, locale = "fr-FR"): string {
-  return new Intl.NumberFormat(locale, {
-    style: "currency",
-    currency: "EUR",
-  }).format(cents / 100);
+  return currencyFormatter(locale).format(cents / 100);
 }
 
 /** Format integer cents as a plain decimal string for form inputs, e.g. 65000 -> "650,00". */

@@ -11,12 +11,17 @@
   --negative: #dc2626;
   --warning: #d97706;
   --radius: 14px;
-  /* Vertical room the floating bar occupies (shell + its bottom gutter),
-     excluding the safe-area inset. Shared by the bar, the page's bottom
-     padding and the FAB's offset so the three can never drift apart. */
-  --tabbar-h: 80px;
-  /* What the slot adds to that when it is filled (its padding + divider). */
-  --tabbar-slot-h: 28px;
+  /* Default size of an inline SVG icon; a container overrides it on itself. */
+  --icon-size: 18px;
+  --fab-size: 54px;
+
+  /* Floating bar geometry, in parts; the total is derived on `body` below. */
+  --tabbar-nav-h: 58px;
+  --tabbar-pad: 5px;
+  --tabbar-gutter: 10px;
+  /* Extra height the slot adds when filled; see `body:has(.tabbar__slot)`. */
+  --tabbar-slot-h: 0px;
+
   /* Translucent chrome for the floating bar. */
   --glass-bg: rgb(255 255 255 / 72%);
   --glass-border: rgb(15 23 42 / 8%);
@@ -54,6 +59,15 @@ body,
 }
 
 body {
+  /* Total room the bar occupies, DERIVED from its parts rather than
+     hand-summed, so changing the nav height or the shell padding keeps every
+     consumer (page padding, FAB offset) in step by construction.
+     Declared here, not on :root, because a custom property's var()s are
+     substituted where it is DECLARED — on :root it would freeze
+     --tabbar-slot-h at 0 and never see the `body:has()` override below. */
+  --tabbar-h: calc(
+    var(--tabbar-nav-h) + 2 * var(--tabbar-pad) + 2px + var(--tabbar-gutter) + var(--tabbar-slot-h)
+  );
   background: var(--bg);
   color: var(--text);
   overscroll-behavior-y: contain;
@@ -98,10 +112,12 @@ code {
   padding: 16px 16px calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 16px);
 }
 
-/* A filled slot makes the bar taller; the page owes it that much more room.
-   Browsers without :has() simply keep the base padding. */
-body:has(.tabbar__slot) .app {
-  padding-bottom: calc(var(--tabbar-h) + var(--tabbar-slot-h) + env(safe-area-inset-bottom) + 16px);
+/* A filled slot makes the bar taller. Teach the GEOMETRY, not each consumer:
+   the page padding and the FAB offset both read --tabbar-h, so both follow —
+   and so will the next thing anchored to the bar. Browsers without :has()
+   simply keep the base height. */
+body:has(.tabbar__slot) {
+  --tabbar-slot-h: 38px;
 }
 
 .topbar {
@@ -147,7 +163,7 @@ body:has(.tabbar__slot) .app {
   z-index: 30;
   display: flex;
   justify-content: center;
-  padding: 0 12px calc(10px + env(safe-area-inset-bottom));
+  padding: 0 12px calc(var(--tabbar-gutter) + env(safe-area-inset-bottom));
   pointer-events: none;
 }
 
@@ -155,7 +171,7 @@ body:has(.tabbar__slot) .app {
   pointer-events: auto;
   width: 100%;
   max-width: var(--maxw);
-  padding: 5px;
+  padding: var(--tabbar-pad);
   border-radius: 26px;
   background: var(--glass-bg);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
@@ -183,7 +199,7 @@ body:has(.tabbar__slot) .app {
 .tabbar__nav {
   display: flex;
   align-items: stretch;
-  height: 58px;
+  height: var(--tabbar-nav-h);
 }
 
 .tabbar__item {
@@ -200,12 +216,7 @@ body:has(.tabbar__slot) .app {
   font-size: 0.68rem;
   padding: 0 2px;
   border-radius: 21px;
-}
-
-.tabbar__item svg {
-  width: 23px;
-  height: 23px;
-  flex: none;
+  --icon-size: 23px;
 }
 
 .tabbar__item[aria-current="page"] {
@@ -229,42 +240,16 @@ body:has(.tabbar__slot) .app {
   color: var(--text-muted);
 }
 
-/* ---- inline icon sizing -------------------------------------------------- */
+/* ---- inline icons -------------------------------------------------------- */
 
-/* An SVG with only a viewBox has no intrinsic size — left alone it would lay
-   out at 300x150. Every context that holds one sets it here, general first so
-   the specific rules below can override on equal specificity. */
-.btn svg,
-.account-menu__row-main svg,
-.list-item--btn > svg {
-  width: 18px;
-  height: 18px;
+/* An SVG carrying only a viewBox has no intrinsic size — left alone it lays out
+   at the container's width. Every icon ships this class, so a new placement is
+   sized correctly for free; a container that wants another size sets
+   --icon-size on ITSELF rather than adding a descendant selector here. */
+.icon {
+  width: var(--icon-size);
+  height: var(--icon-size);
   flex: none;
-}
-
-.btn--icon svg {
-  width: 17px;
-  height: 17px;
-}
-
-.month-nav__btn svg {
-  width: 20px;
-  height: 20px;
-}
-
-.account-trigger__caret svg {
-  width: 15px;
-  height: 15px;
-}
-
-.ptr__badge svg {
-  width: 20px;
-  height: 20px;
-}
-
-.install__icon svg {
-  width: 22px;
-  height: 22px;
 }
 
 /* ---- cards & lists ------------------------------------------------------ */
@@ -390,14 +375,12 @@ textarea.input {
   left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  width: 18px;
-  height: 18px;
   color: var(--text-muted);
   pointer-events: none;
 }
 
 .search__input {
-  padding-left: 38px;
+  padding-left: calc(12px + var(--icon-size) + 8px);
 }
 
 .input:focus,
@@ -467,8 +450,6 @@ textarea.input {
 .btn--icon {
   padding: 8px;
   min-width: 38px;
-  font-size: 1rem;
-  line-height: 1;
 }
 
 /* The "this row is editable" affordance at the end of an expense row. */
@@ -476,11 +457,6 @@ textarea.input {
   flex: none;
   display: flex;
   color: var(--text-muted);
-}
-
-.list-item__edit svg {
-  width: 18px;
-  height: 18px;
 }
 
 /* Trailing controls of a list row, kept on one line next to the label. */
@@ -505,8 +481,9 @@ textarea.input {
   right: max(16px, calc(50vw - var(--maxw) / 2 + 16px));
   bottom: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 14px);
   z-index: 29;
-  width: 54px;
-  height: 54px;
+  --icon-size: 26px;
+  width: var(--fab-size);
+  height: var(--fab-size);
   border: none;
   border-radius: 50%;
   display: grid;
@@ -516,16 +493,11 @@ textarea.input {
   box-shadow: 0 8px 22px rgb(37 99 235 / 38%);
 }
 
-.fab svg {
-  width: 26px;
-  height: 26px;
-}
-
 /* Only the tab that owns the FAB pays for it: extra scroll room so the last
    row comes to rest ABOVE the button. Content still passes under it while
    scrolling — that part is expected — but nothing is stranded there. */
 .has-fab {
-  padding-bottom: 66px;
+  padding-bottom: calc(var(--fab-size) + 12px);
 }
 
 /* ---- pull to refresh ---------------------------------------------------- */
@@ -542,7 +514,6 @@ textarea.input {
 }
 
 .ptr__badge {
-  color: var(--primary);
   margin-top: 6px;
   width: 38px;
   height: 38px;
@@ -553,7 +524,7 @@ textarea.input {
   display: grid;
   place-items: center;
   color: var(--primary);
-  font-size: 1.2rem;
+  --icon-size: 20px;
   will-change: transform, opacity;
 }
 
@@ -584,8 +555,7 @@ textarea.input {
 .install__icon {
   display: flex;
   color: var(--primary);
-  font-size: 1.4rem;
-  line-height: 1;
+  --icon-size: 22px;
 }
 
 .install__text {
@@ -971,7 +941,7 @@ textarea.input {
 .account-trigger__caret {
   flex: none;
   color: var(--text-muted);
-  font-size: 0.8rem;
+  --icon-size: 15px;
 }
 
 .account-menu__section {
@@ -1028,8 +998,7 @@ textarea.input {
 .month-nav__btn {
   flex: none;
   min-width: 44px;
-  font-size: 1.3rem;
-  line-height: 1;
+  --icon-size: 20px;
 }
 
 .cashflow-totals {

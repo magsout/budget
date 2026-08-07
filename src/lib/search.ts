@@ -26,17 +26,17 @@ function normalize(value: string): string {
 function haystack(expense: Expense): string {
   const amount = centsToInput(expense.amountCents); // "42,50"
   const [year, month, day] = expense.date.split("-");
+  // Only forms that add a NEW substring are listed: "42" is already inside
+  // "42,50", and "07/08" inside "07/08/2026", so neither earns a line.
   return normalize(
     [
-      amount,
-      amount.replace(",", "."),
-      amount.split(",")[0], // whole euros
+      amount, // 42,50
+      amount.replace(",", "."), // 42.50
       expense.date, // 2026-08-07
-      `${day}/${month}`,
-      `${day}/${month}/${year}`,
+      `${day}/${month}/${year}`, // 07/08/2026
       `${Number(day)}/${Number(month)}`, // 7/8, without the padding
-      formatDate(expense.date), // 7 sept. 2026 — abbreviated month
-      formatMonth(monthOf(expense.date)), // Septembre 2026 — spelled out
+      formatDate(expense.date), // 7 août 2026 — abbreviated month
+      formatMonth(monthOf(expense.date)), // Août 2026 — spelled out
       expense.description ?? "",
     ].join(" "),
   );

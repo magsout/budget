@@ -25,14 +25,13 @@ export function App() {
 
   // Data shown from cache (offline / not yet confirmed) or local writes still
   // being pushed. Rides in the tab bar's slot: transient, like a mini-player.
-  const showSync = syncing || pendingWrites;
-  const syncLabel = pendingWrites ? "Synchronisation…" : "Mise à jour…";
-  const syncPill = showSync ? (
-    <span className="sync-pill" role="status">
-      <span className="sync-pill__spinner" aria-hidden />
-      {syncLabel}
-    </span>
-  ) : undefined;
+  const syncPill =
+    syncing || pendingWrites ? (
+      <span className="sync-pill" role="status">
+        <span className="sync-pill__spinner" aria-hidden />
+        {pendingWrites ? "Synchronisation…" : "Mise à jour…"}
+      </span>
+    ) : undefined;
 
   return (
     <PullToRefresh>

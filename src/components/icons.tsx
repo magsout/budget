@@ -9,6 +9,9 @@
  */
 
 const BASE = {
+  // `.icon` carries the size: see the rule in global.css. Without it an SVG
+  // with no width/height attributes lays out at its container's width.
+  className: "icon",
   viewBox: "0 0 24 24",
   fill: "none",
   stroke: "currentColor",

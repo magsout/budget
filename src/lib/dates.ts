@@ -58,22 +58,36 @@ export function monthRange(from: MonthKey, to: MonthKey): MonthKey[] {
   return out;
 }
 
-/** Human label for a month key, e.g. "2026-07" -> "juillet 2026". */
+/**
+ * Formatters are cached per locale: `toLocaleDateString` builds a fresh
+ * `Intl.DateTimeFormat` on every call, which dwarfs the formatting itself —
+ * and these run once per row, and once per expense while searching.
+ */
+const dateFormatters = new Map<string, Intl.DateTimeFormat>();
+
+function dateFormatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
+  const key = `${locale}|${options.month}`;
+  let formatter = dateFormatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(locale, options);
+    dateFormatters.set(key, formatter);
+  }
+  return formatter;
+}
+
+/** Human label for a month key, e.g. "2026-07" -> "Juillet 2026". */
 export function formatMonth(month: MonthKey, locale = "fr-FR"): string {
   const [y, m] = month.split("-").map(Number);
-  const label = new Date(y, m - 1, 1).toLocaleDateString(locale, {
-    month: "long",
-    year: "numeric",
-  });
+  const label = dateFormatter(locale, { month: "long", year: "numeric" }).format(
+    new Date(y, m - 1, 1),
+  );
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 /** Human label for a date key, e.g. "2026-07-22" -> "22 juil. 2026". */
 export function formatDate(date: DateKey, locale = "fr-FR"): string {
   const [y, m, d] = date.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString(locale, {
-    day: "numeric",
-    month: "short",
-    year: "numeric",
-  });
+  return dateFormatter(locale, { day: "numeric", month: "short", year: "numeric" }).format(
+    new Date(y, m - 1, d),
+  );
 }
