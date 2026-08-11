@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
   currentMonth,
+  formatDate,
+  formatDayShort,
+  formatMonth,
+  isToday,
   localToday,
   monthOf,
   monthRange,
@@ -41,5 +45,49 @@ describe("dates", () => {
 
   it("monthRange returns [] when from is after to", () => {
     expect(monthRange("2026-08", "2026-07")).toEqual([]);
+  });
+});
+
+describe("date formatting", () => {
+  it("formats a month, a date and a day header", () => {
+    expect(formatMonth("2026-08")).toBe("Août 2026");
+    expect(formatDate("2026-08-11")).toBe("11 août 2026");
+    expect(formatDayShort("2026-08-11")).toBe("Mar. 11 août");
+  });
+
+  it("formatDayShort drops the year and keeps the weekday", () => {
+    // The list is already scoped to one month, so the year would be noise.
+    expect(formatDayShort("2026-08-01")).toBe("Sam. 1 août");
+    expect(formatDayShort("2026-08-09")).toBe("Dim. 9 août");
+  });
+
+  /**
+   * The formatter cache is keyed by option set. It used to be keyed on `month`
+   * alone, so whichever of these ran FIRST won the `fr-FR|long` slot and the
+   * others silently got its output. Calling them in both orders is what catches
+   * that: run the whole trio twice, reversed, and demand identical results.
+   */
+  it("does not hand one format the cached formatter of another", () => {
+    const forwards = [
+      formatMonth("2026-08"),
+      formatDate("2026-08-11"),
+      formatDayShort("2026-08-11"),
+    ];
+    const backwards = [
+      formatDayShort("2026-08-11"),
+      formatDate("2026-08-11"),
+      formatMonth("2026-08"),
+    ].toReversed();
+    expect(forwards).toEqual(backwards);
+    // And they must all be different from each other — the collision made two
+    // of them equal.
+    expect(new Set(forwards).size).toBe(3);
+  });
+
+  it("isToday compares against the local day", () => {
+    const now = new Date(2026, 7, 11, 23, 30, 0);
+    expect(isToday("2026-08-11", now)).toBe(true);
+    expect(isToday("2026-08-10", now)).toBe(false);
+    expect(isToday("2026-07-11", now)).toBe(false);
   });
 });

@@ -59,14 +59,29 @@ export function monthRange(from: MonthKey, to: MonthKey): MonthKey[] {
 }
 
 /**
- * Formatters are cached per locale: `toLocaleDateString` builds a fresh
- * `Intl.DateTimeFormat` on every call, which dwarfs the formatting itself —
- * and these run once per row, and once per expense while searching.
+ * Formatters are cached per locale AND per option set: `toLocaleDateString`
+ * builds a fresh `Intl.DateTimeFormat` on every call, which dwarfs the
+ * formatting itself — and these run once per row, and once per expense while
+ * searching.
+ *
+ * The key must cover EVERY option that distinguishes two formatters. It used to
+ * be just `${locale}|${options.month}`, which happened to work only because the
+ * two callers differed on `month` ("long" vs "short"). Any third format reusing
+ * a `month` value already in the cache would have silently received the wrong
+ * formatter — `formatDayShort` asks for `{ weekday, day, month: "long" }` and
+ * would have been handed `formatMonth`'s, printing "août 2026" for every day
+ * header. Add an option here whenever a new format needs one.
  */
 const dateFormatters = new Map<string, Intl.DateTimeFormat>();
 
 function dateFormatter(locale: string, options: Intl.DateTimeFormatOptions): Intl.DateTimeFormat {
-  const key = `${locale}|${options.month}`;
+  const key = [
+    locale,
+    options.weekday ?? "-",
+    options.day ?? "-",
+    options.month ?? "-",
+    options.year ?? "-",
+  ].join("|");
   let formatter = dateFormatters.get(key);
   if (!formatter) {
     formatter = new Intl.DateTimeFormat(locale, options);
@@ -75,13 +90,17 @@ function dateFormatter(locale: string, options: Intl.DateTimeFormatOptions): Int
   return formatter;
 }
 
+/** Uppercase the first letter, the way French month and weekday labels want it. */
+function capitalize(label: string): string {
+  return label.charAt(0).toUpperCase() + label.slice(1);
+}
+
 /** Human label for a month key, e.g. "2026-07" -> "Juillet 2026". */
 export function formatMonth(month: MonthKey, locale = "fr-FR"): string {
   const [y, m] = month.split("-").map(Number);
-  const label = dateFormatter(locale, { month: "long", year: "numeric" }).format(
-    new Date(y, m - 1, 1),
+  return capitalize(
+    dateFormatter(locale, { month: "long", year: "numeric" }).format(new Date(y, m - 1, 1)),
   );
-  return label.charAt(0).toUpperCase() + label.slice(1);
 }
 
 /** Human label for a date key, e.g. "2026-07-22" -> "22 juil. 2026". */
@@ -90,4 +109,23 @@ export function formatDate(date: DateKey, locale = "fr-FR"): string {
   return dateFormatter(locale, { day: "numeric", month: "short", year: "numeric" }).format(
     new Date(y, m - 1, d),
   );
+}
+
+/**
+ * Day label for a group header, e.g. "2026-08-11" -> "Mar. 11 août". The year is
+ * deliberately absent: the list is already scoped to one month, so repeating
+ * "2026" on every header is noise.
+ */
+export function formatDayShort(date: DateKey, locale = "fr-FR"): string {
+  const [y, m, d] = date.split("-").map(Number);
+  return capitalize(
+    dateFormatter(locale, { weekday: "short", day: "numeric", month: "long" }).format(
+      new Date(y, m - 1, d),
+    ),
+  );
+}
+
+/** True when the date key is today, in the browser's local timezone. */
+export function isToday(date: DateKey, now: Date = new Date()): boolean {
+  return date === localToday(now);
 }
