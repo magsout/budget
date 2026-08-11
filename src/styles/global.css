@@ -22,11 +22,19 @@
   /* Extra height the slot adds when filled; see `body:has(.tabbar__slot)`. */
   --tabbar-slot-h: 0px;
 
-  /* Translucent chrome for the floating bar. */
-  --glass-bg: rgb(255 255 255 / 72%);
+  /* Translucent chrome for the floating bar. Kept high (88%, not 72%): the blur
+     alone does not hide the text scrolling underneath, and a nav bar you can
+     read digits through reads as a rendering bug. See also `.tabbar::before`. */
+  --glass-bg: rgb(255 255 255 / 88%);
   --glass-border: rgb(15 23 42 / 8%);
   --shadow: 0 1px 3px rgb(15 23 42 / 8%), 0 1px 2px rgb(15 23 42 / 6%);
   --maxw: 640px;
+
+  /* The empty part of a bar. Derived from --text, so ONE declaration covers both
+     themes — no dark-mode counterpart to forget. The plain fallback is declared
+     first for engines without color-mix(). */
+  --track: var(--surface-2);
+  --track: color-mix(in srgb, var(--text) 8%, transparent);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,7 +50,7 @@
     --negative: #f87171;
     --warning: #fbbf24;
     --shadow: 0 1px 3px rgb(0 0 0 / 40%);
-    --glass-bg: rgb(17 24 39 / 72%);
+    --glass-bg: rgb(17 24 39 / 88%);
     --glass-border: rgb(255 255 255 / 10%);
   }
 }
@@ -167,7 +175,34 @@ body:has(.tabbar__slot) {
   pointer-events: none;
 }
 
+/* Fade the page out behind the floating bar. A 20px blur does not hide a digit —
+   text stays legible under the pill, which is what made the last rows of a long
+   list look broken. This is the fix; raising --glass-bg is the other half.
+
+   The gradient stops AT the pill on purpose: everything inside `.tabbar` paints
+   above the FAB (z-index 29), so a taller scrim would veil the add button.
+   It READS --tabbar-h and never redefines it — the derivation on `body` stays
+   the single source of the bar's height. */
+.tabbar::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: calc(var(--tabbar-h) + env(safe-area-inset-bottom) + 20px);
+  background: linear-gradient(to top, var(--bg) 45%, transparent);
+  /* Inherited from .tabbar, restated so a later refactor of that rule cannot
+     silently turn this gradient into an invisible tap shield. */
+  pointer-events: none;
+}
+
+/* `position` is REQUIRED here, and must come before the ::before above can work:
+   `.tabbar` is `position: fixed` with a z-index, so it opens a stacking context,
+   and an unpositioned `.tabbar__shell` would be painted UNDER the positioned
+   pseudo-element — the scrim would cover the frosted glass instead of the page. */
 .tabbar__shell {
+  position: relative;
+  z-index: 1;
   pointer-events: auto;
   width: 100%;
   max-width: var(--maxw);
@@ -263,12 +298,62 @@ body:has(.tabbar__slot) {
   margin-bottom: 12px;
 }
 
+/* A card's title line, carrying its total on the right. The eyebrow styling is
+   `.summary__label`'s, which is already the vocabulary for "small uppercase
+   label above a figure" — a card title and a summary label are the same rank.
+   Scoped to `.card__head h3` on purpose: a bare `h3` rule would restyle the
+   dozen headings of Config.tsx that nobody asked to touch. */
+/* Wraps, because on a 390px phone "DÉPENSES DU MOIS", its total and a "Tout
+   replier" button do not fit on one line — unwrapped, the button was clipped by
+   the card edge. The total keeps `margin-left: auto` so it stays hard right on
+   line one, and the actions do too so they stay right when they drop to line
+   two. */
+.card__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  margin-bottom: 8px;
+}
+
+.card__head > h3 {
+  margin-right: auto;
+}
+
+.card__head h3 {
+  margin: 0;
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-muted);
+}
+
+.card__head-total {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.card__head-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-left: auto;
+}
+
 .summary {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 12px;
   margin-bottom: 14px;
+}
+
+/* The bottom margin exists to separate the figure from what follows it. In the
+   Budget and Historique hero cards `.summary` is the only child, so those 14px
+   are dead space at the bottom of the card. */
+.summary:last-child {
+  margin-bottom: 0;
 }
 
 .summary__label {
@@ -281,6 +366,34 @@ body:has(.tabbar__slot) {
 .summary__value {
   font-size: 1.6rem;
   font-weight: 800;
+}
+
+/* The right-hand half of a two-up summary. */
+.summary__col--end {
+  text-align: right;
+}
+
+/* Two figures of unequal rank, label left and figure right, instead of two
+   equal-weight columns. */
+.summary--stack {
+  display: block;
+}
+
+.summary__row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.summary__label--sub {
+  text-transform: none;
+  letter-spacing: normal;
+}
+
+.summary__value--sub {
+  font-size: 1.05rem;
+  font-weight: 700;
 }
 
 .poste {
@@ -325,12 +438,95 @@ body:has(.tabbar__slot) {
   gap: 10px;
 }
 
+/* ---- poste rows (the month card) ---------------------------------------- */
+
+/* The hero figure sits closer to the rows that explain it than a standalone card
+   needed to. */
+.monthcard .summary {
+  margin-bottom: 10px;
+}
+
+/* name | spent/available | remaining | + , then the bar across the full width. */
+.poste-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 4px 10px;
+  align-items: baseline;
+  min-height: 56px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.poste-row:last-child {
+  border-bottom: none;
+}
+
+/* This reset used to be four inline style props on the element itself, which made
+   it impossible to add a hover or a focus state. */
+.poste-row--btn {
+  width: 100%;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+}
+
+.poste-row--btn:last-child {
+  border-bottom: none;
+}
+
+/* The row lost the card shadow that used to signal "this is tappable", so it
+   needs its own feedback. */
+.poste-row--btn:hover,
+.poste-row--btn:active {
+  background: var(--surface-2);
+}
+
+.poste-row__name {
+  font-weight: 700;
+  font-size: 1.05rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.poste-row__meta {
+  grid-column: 1 / -1;
+  grid-row: 2;
+}
+
+.poste-row__rem {
+  font-weight: 800;
+  font-size: 1.15rem;
+  text-align: right;
+}
+
+.poste-row__add {
+  display: flex;
+  align-self: center;
+  color: var(--text-muted);
+  --icon-size: 16px;
+}
+
+.poste-row .bar {
+  grid-column: 1 / -1;
+  grid-row: 3;
+  margin-top: 2px;
+}
+
 .bar {
   height: 8px;
   border-radius: 999px;
-  background: var(--surface-2);
+  /* Was --surface-2 on --surface: in light mode that is #f8fafc on #ffffff, all
+     but invisible, which is why the track needed a border to be seen at all. A
+     tint of --text works in BOTH themes from a single declaration, so the border
+     can go. */
+  background: var(--track);
   overflow: hidden;
-  border: 1px solid var(--border);
+  border: 0;
 }
 
 .bar__fill {
@@ -453,6 +649,21 @@ textarea.input {
 }
 
 /* The "this row is editable" affordance at the end of an expense row. */
+/* The row's text side. `min-width: 0` is what lets a long description shrink
+   and ellipsize instead of pushing the amount column off the right edge. */
+.list-item__main {
+  min-width: 0;
+  flex: 1;
+}
+
+/* The amount lives in its own right-hand column so a list reads as a column of
+   figures rather than a stack of sentences. Pair it with `.num`. */
+.list-item__amount {
+  flex: none;
+  font-weight: 700;
+  text-align: right;
+}
+
 .list-item__edit {
   flex: none;
   display: flex;
@@ -490,7 +701,12 @@ textarea.input {
   place-items: center;
   background: var(--primary);
   color: var(--primary-contrast);
-  box-shadow: 0 8px 22px rgb(37 99 235 / 38%);
+  /* The first shadow is a solid RING, not a glow: while scrolling, the disc
+     passes over card text and used to sit directly on top of an amount. The ring
+     is --surface (the CARDS it flies over), not --bg (the page behind them). */
+  box-shadow:
+    0 0 0 5px var(--surface),
+    0 8px 22px rgb(37 99 235 / 38%);
 }
 
 /* Only the tab that owns the FAB pays for it: extra scroll room so the last
@@ -679,9 +895,220 @@ textarea.input {
   background: var(--surface-2);
 }
 
+/* A MODIFIER, not a replacement: `.list-item` above stays exactly as it was for
+   the thirteen rows Config.tsx and AccountMenu.tsx render, and this only opts a
+   row into the one-line grid. Must stay after both base rules to win the
+   `display` declaration. */
+.list-item--dense {
+  display: grid;
+  align-items: center;
+  /* 44px floor. The neighbouring row opens a DIFFERENT expense for editing, so
+     this is not a place to shave pixels — it is the same floor `.list-item` and
+     `.month-nav__btn` already hold. */
+  min-height: 44px;
+  padding: 8px 0;
+}
+
+/* dot | text | who | amount [| pencil] */
+.xrow {
+  grid-template-columns: 10px minmax(0, 1fr) 18px auto;
+  gap: 0 10px;
+}
+
+.xrow--btn {
+  grid-template-columns: 10px minmax(0, 1fr) 18px auto auto;
+}
+
+/* `minmax(0, 1fr)` above is what lets this shrink; without it the track would
+   floor at the text's min-content width and shove the amount off the edge. */
+.xrow__label {
+  display: flex;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+/* The only part allowed to shrink. */
+.xrow__desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Short, and the row's link to a budget — it must never be the thing that gets
+   cut. */
+.xrow__poste {
+  flex: none;
+}
+
+.xrow__who {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  font-size: 0.68rem;
+  font-weight: 700;
+  color: var(--primary-contrast);
+  background: var(--primary);
+}
+
+.xrow__amount {
+  font-weight: 700;
+  text-align: right;
+}
+
+.xrow--btn .list-item__edit {
+  --icon-size: 15px;
+  opacity: 0.55;
+}
+
+/* ---- day groups ---------------------------------------------------------- */
+
+/* One block per day. Load-bearing: sticky positions against the nearest scrolling
+   ancestor's containing block, so WITHOUT a wrapper per group every header would
+   share `.card`, all stick at top: 0 at once, and the oldest day would paint over
+   the current one. */
+.daygroup {
+  position: relative;
+}
+
+/* CAREFUL: `position: sticky` dies silently if any ancestor gets
+   `overflow: hidden`. Verified clear today — `.card`, `.app` and `#root` have
+   none, and PullToRefresh renders `.ptr` as a SIBLING of its children, so nothing
+   above this is a transformed/clipping container. Adding `overflow: hidden` to
+   `.card` (to clip a rounded corner, say) would break every header here. */
+.daygroup__head {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: grid;
+  grid-template-columns: 14px minmax(0, 1fr) auto auto;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  min-height: 38px;
+  /* Cancels `.card`'s 16px side padding exactly, so the header's background and
+     rule span the full card width instead of leaving the rows to scroll past its
+     edges. Keep the two in step. */
+  margin: 0 -16px;
+  padding: 6px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  /* Opaque: the rows scroll UNDER this. */
+  background: var(--surface);
+  font: inherit;
+  color: inherit;
+  text-align: inherit;
+}
+
+.daygroup__caret {
+  display: flex;
+  align-self: center;
+  color: var(--text-muted);
+  --icon-size: 14px;
+}
+
+/* One line, always: with "· aujourd'hui" appended, the label used to wrap and
+   push the header to two lines — on the one row that is always on screen. The
+   date is short enough that the ellipsis never actually triggers. */
+.daygroup__label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Dropped first when the header runs out of room: "5 lignes" is the least
+   valuable thing on the line, behind the date and the day's total. */
+.daygroup__count {
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+.daygroup__meta,
+.daygroup__count {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+  font-weight: 400;
+  letter-spacing: normal;
+  text-transform: none;
+}
+
+.daygroup__total {
+  white-space: nowrap;
+}
+
+.daygroup__total {
+  font-weight: 700;
+}
+
 .muted {
   color: var(--text-muted);
   font-size: 0.85rem;
+}
+
+/* Visible to a screen reader, invisible on screen — used to keep the date and
+   the author of an expense readable (and findable by Playwright's text
+   matching) once the layout stops showing them as their own line.
+
+   NOT `display: none`, which would take it out of the accessibility tree and out
+   of `textContent` — i.e. exactly the two things it exists for. */
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The app's interactive vocabulary had focus rings on inputs, the tab bar and the
+   swatches only — so the most-tapped controls (a list row, a chip, the add
+   button) were unreachable-looking by keyboard. One rule covers them all; adding
+   a new control means adding it here, not inventing another outline.
+   `:where()` keeps specificity at zero, so a component can still override. */
+:where(
+  .list-item--btn,
+  .poste__toggle,
+  .poste-row--btn,
+  .daygroup__head,
+  .chip,
+  .fab,
+  .month-nav__btn
+):focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: -2px;
+  border-radius: 8px;
+}
+
+/* Targeted, NOT a blanket "kill every animation": the sync pill and the
+   pull-to-refresh badge are loading indicators — a frozen spinner reads as a
+   hung app, which is worse than the motion it avoids. */
+@media (prefers-reduced-motion: reduce) {
+  .bar__fill,
+  .stackbar__seg {
+    transition: none;
+  }
+
+  .modal {
+    animation: none;
+  }
+}
+
+/* Fixed-width digits, so a column of amounts lines up on the comma instead of
+   drifting with the glyph widths of system-ui. Deliberately a class and NOT a
+   rule on `body`: tabular figures are ~3% wider, which would push running text
+   and the Réglages inputs around for no gain. Put it on the amount, not on its
+   container. */
+.num {
+  font-variant-numeric: tabular-nums;
 }
 
 .chips {
@@ -719,6 +1146,14 @@ textarea.input {
   overflow-x: auto;
   scrollbar-width: none;
   -webkit-overflow-scrolling: touch;
+  /* Was an inline `style={{ marginBottom: 12 }}` on the one consumer; here it can
+     be overridden by a media query or a variant, there it could not. */
+  margin-bottom: 12px;
+}
+
+/* The month picker strip of the Historique tab. */
+.chips--months {
+  margin-bottom: 14px;
 }
 
 .chips--strip::-webkit-scrollbar {
@@ -803,24 +1238,57 @@ textarea.input {
   color: var(--text-muted);
 }
 
-/* Per-person spending row: label line above its share bar. */
-.split {
+/* ---- stacked bar --------------------------------------------------------- */
+
+/* Replaces the old `.split` rows, where each person got their own bar scaled to
+   the biggest spender — so the top one was always exactly full and the picture
+   added nothing to the numbers. Here the segments share one total, which is what
+   makes their lengths comparable. */
+.stackbar {
   display: flex;
-  flex-direction: column;
+  height: 14px;
+  border-radius: 999px;
+  overflow: hidden;
+  background: var(--track);
+}
+
+/* A segment worth real money must leave a mark: 0,21 € of 3 926 € rounds to a
+   sub-pixel width, and would vanish without this floor. */
+.stackbar__seg {
+  min-width: 2px;
+}
+
+.stackbar__legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  margin-top: 8px;
+  font-size: 0.85rem;
+  color: var(--text-muted);
+}
+
+.stackbar__item {
+  display: inline-flex;
+  align-items: baseline;
   gap: 6px;
-  padding: 10px 0;
-  border-bottom: 1px solid var(--border);
 }
 
-.split:last-child {
-  border-bottom: none;
+.stackbar__item strong {
+  color: var(--text);
 }
 
-.split__head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+.stackbar__key {
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  flex: none;
+  /* Baseline-aligned text next to a bare square looks dropped; nudge it up. */
+  transform: translateY(1px);
+}
+
+.stackbar__note {
+  margin: 6px 0 0;
+  font-size: 0.85rem;
 }
 
 /* ---- color swatch picker ------------------------------------------------ */
@@ -1001,13 +1469,64 @@ textarea.input {
   --icon-size: 20px;
 }
 
-.cashflow-totals {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  margin-top: 10px;
-  color: var(--text-muted);
-  font-size: 0.9rem;
+/* The stepper inside the card it drives, ruled off from the figures below it. */
+.month-nav--inline {
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+}
+
+/* ---- cashflow rows (the Compte tab) ------------------------------------- */
+
+/* Two side-by-side lists once there is room for them. Honest limit: at 375px,
+   "Guillaume" and "2 454,64 €" do not fit in a 148px half-column, so small
+   phones keep them stacked. */
+.duo {
+  display: grid;
+  gap: 18px;
+}
+
+@media (min-width: 480px) {
+  .duo {
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+  }
+}
+
+/* name | share | amount , with the description spanning underneath. */
+.cash-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 2px 12px;
+  align-items: baseline;
+  min-height: 44px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.cash-row:last-child {
+  border-bottom: none;
+}
+
+.cash-row__name {
+  font-weight: 700;
+  min-width: 0;
+}
+
+.cash-row__amount {
+  font-weight: 700;
+  text-align: right;
+}
+
+/* CLAMPED to two lines, not truncated to one with a `title`: "Amazon Prime,
+   Amazon drive, NBA, Ring, deezer" IS the content of that row, and a `title` is
+   unreachable by touch. */
+.cash-row__desc {
+  grid-column: 1 / -1;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 
 .user-choices {
