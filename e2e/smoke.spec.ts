@@ -187,14 +187,76 @@ test.describe("Budget", () => {
     await expect(page.getByRole("button", { name: "Courses (3)" })).toBeVisible();
   });
 
+  test("chaque journée annonce sa date, son compte et son total", async ({ page }) => {
+    await page.goto("fixture.html");
+
+    // Le mois courant du fixture a une dépense par jour, les 02/04/05/06/07.
+    const heads = page.locator(".daygroup__head");
+    await expect(heads).toHaveCount(5);
+    // Plus récent en premier, et le total du jour est une information que
+    // l'écran n'affichait nulle part avant.
+    await expect(heads.first()).toContainText("7 août");
+    await expect(heads.first()).toContainText("1 ligne");
+    await expect(heads.first()).toContainText("31,20");
+    // Tout est ouvert par défaut : rien n'est caché à l'arrivée.
+    await expect(page.locator(".list-item--btn")).toHaveCount(5);
+  });
+
+  test("« Tout replier » garde les totaux visibles et n'efface rien en silence", async ({
+    page,
+  }) => {
+    await page.goto("fixture.html");
+    const heads = page.locator(".daygroup__head");
+    const rows = page.locator(".list-item--btn");
+
+    await page.getByRole("button", { name: "Tout replier" }).click();
+
+    // Les en-têtes restent tous là, chacun avec son total : replier réduit la
+    // hauteur, il ne retire pas l'information. Le jour le plus récent reste
+    // ouvert — atterrir sur une liste entièrement fermée se lit comme un écran
+    // vide.
+    await expect(heads).toHaveCount(5);
+    await expect(rows).toHaveCount(1);
+    await expect(heads.last()).toContainText("42,50");
+    // Et le total du mois ne bouge pas.
+    const monthCard = page.locator(".card").filter({ hasText: "Dépenses du mois" });
+    await expect(monthCard.locator(".card__head-total")).toContainText("250,70");
+
+    // Le mode est mémorisé d'un chargement à l'autre.
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Tout déplier" })).toBeVisible();
+    await expect(rows).toHaveCount(1);
+
+    // Mais une recherche rouvre tout, malgré le mode replié : des boîtes fermées
+    // se lisent comme « rien trouvé ».
+    await page
+      .getByRole("searchbox", { name: "Rechercher une dépense par montant, date ou description" })
+      .fill("aout");
+    await expect(rows).toHaveCount(5);
+    await expect(heads).toHaveCount(5);
+
+    // Et vider la recherche rend la main au mode replié.
+    await page
+      .getByRole("searchbox", { name: "Rechercher une dépense par montant, date ou description" })
+      .fill("");
+    await expect(rows).toHaveCount(1);
+  });
+
   test("la répartition par personne totalise chaque profil", async ({ page }) => {
     await page.goto("fixture.html");
 
     const split = page.locator(".card").filter({ hasText: "Qui a dépensé quoi" });
-    await expect(split.locator(".split")).toHaveCount(2);
+    const items = split.locator(".stackbar__item");
+    await expect(items).toHaveCount(2);
     // Biggest spender first.
-    await expect(split.locator(".split").first()).toContainText("Marie");
-    await expect(split.locator(".split").first()).toContainText("2 dépenses");
+    await expect(items.first()).toContainText("Marie");
+    await expect(items.first()).toContainText("2 dépenses");
+    // A length says nothing to a screen reader, so the bar spells out the shares.
+    // `\s` rather than a literal space: fr-FR puts a no-break space before the %.
+    await expect(split.getByRole("img")).toHaveAttribute(
+      "aria-label",
+      /Marie.*61\s%.*Guillaume.*39\s%/s,
+    );
   });
 
   test("un raccourci fréquent préremplit le formulaire en un tap", async ({ page }) => {

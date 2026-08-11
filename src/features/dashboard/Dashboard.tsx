@@ -1,11 +1,13 @@
 import { useMemo, useState } from "react";
 import { ExpenseList } from "../../components/ExpenseList.tsx";
 import { PlusIcon } from "../../components/icons.tsx";
+import { PosteRows } from "../../components/PosteRows.tsx";
+import { StackBar } from "../../components/StackBar.tsx";
 import { expensesForMonth, monthSummary, spendByUser, totalRemaining } from "../../lib/budget.ts";
 import { avatarColorFor } from "../../lib/colors.ts";
 import { currentMonth, formatMonth } from "../../lib/dates.ts";
-import { carryLabel } from "../../lib/labels.ts";
 import { formatCents } from "../../lib/money.ts";
+import { sumAmountCents } from "../../lib/shape.ts";
 import type { Dataset, Expense } from "../../lib/types.ts";
 import { ExpenseForm } from "../expense/ExpenseForm.tsx";
 
@@ -13,12 +15,6 @@ type FormState =
   | { mode: "create"; categoryId?: string }
   | { mode: "edit"; expense: Expense }
   | null;
-
-function remainingClass(remaining: number, starting: number): string {
-  if (remaining < 0) return "negative";
-  if (starting > 0 && remaining < starting * 0.15) return "warning";
-  return "positive";
-}
 
 export function Dashboard({ dataset }: { dataset: Dataset }) {
   const month = currentMonth();
@@ -28,114 +24,61 @@ export function Dashboard({ dataset }: { dataset: Dataset }) {
   const total = useMemo(() => totalRemaining(dataset, month), [dataset, month]);
   const expenses = useMemo(() => expensesForMonth(dataset, month), [dataset, month]);
   const perUser = useMemo(() => spendByUser(expenses, dataset.users), [expenses, dataset.users]);
+  const spentTotal = useMemo(() => sumAmountCents(expenses), [expenses]);
 
   return (
     <div className="has-fab">
-      <div className="card">
+      {/* One card for the month: what is left, and the postes that explain it.
+          They used to be four cards, which spent ~120px of padding and shadow
+          separating figures that are only meaningful together. */}
+      <div className="card monthcard">
         <div className="summary">
           <div>
             <div className="summary__label">Reste ce mois ({formatMonth(month)})</div>
-            <div className={`summary__value ${total < 0 ? "negative" : "positive"}`}>
+            <div className={`summary__value num ${total < 0 ? "negative" : "positive"}`}>
               {formatCents(total)}
             </div>
           </div>
         </div>
-      </div>
 
-      {summary.length === 0 ? (
-        <div className="card empty">
-          Aucun poste de dépenses. Ajoute-en un dans l'onglet <strong>Config</strong>.
-        </div>
-      ) : (
-        summary.map(({ category, state }) => {
-          const cls = remainingClass(state.remainingCents, state.startingCents);
-          const pct =
-            state.startingCents > 0
-              ? Math.min(100, Math.max(0, (state.spentCents / state.startingCents) * 100))
-              : state.spentCents > 0
-                ? 100
-                : 0;
-          const fillColor =
-            cls === "negative"
-              ? "var(--negative)"
-              : cls === "warning"
-                ? "var(--warning)"
-                : "var(--positive)";
-          return (
-            <button
-              type="button"
-              key={category.id}
-              className="card poste"
-              onClick={() => setForm({ mode: "create", categoryId: category.id })}
-              style={{ textAlign: "inherit", width: "100%", font: "inherit", color: "inherit" }}
-            >
-              <div className="poste__head">
-                <span className="poste__name">
-                  <span
-                    className="poste__dot"
-                    style={category.color ? { background: category.color } : undefined}
-                  />
-                  {category.name}
-                </span>
-                <span className={`poste__remaining ${cls}`}>
-                  {formatCents(state.remainingCents)}
-                </span>
-              </div>
-              <div className="bar">
-                <div className="bar__fill" style={{ width: `${pct}%`, background: fillColor }} />
-              </div>
-              <div className="poste__meta">
-                <span>
-                  Dépensé {formatCents(state.spentCents)} / {formatCents(state.startingCents)}
-                </span>
-                {carryLabel(state) && <span>{carryLabel(state)}</span>}
-              </div>
-            </button>
-          );
-        })
-      )}
+        {summary.length === 0 ? (
+          <p className="muted">
+            Aucun poste de dépenses. Ajoute-en un dans les <strong>Réglages</strong>.
+          </p>
+        ) : (
+          <PosteRows
+            summary={summary}
+            onPick={(categoryId) => setForm({ mode: "create", categoryId })}
+          />
+        )}
+      </div>
 
       {perUser.length > 1 && (
         <div className="card">
-          <h3>Qui a dépensé quoi</h3>
-          {perUser.map(({ user, totalCents, count }) => (
-            <div className="split" key={user.id}>
-              <div className="split__head">
-                <span className="poste__name">
-                  <span
-                    className="account-menu__avatar"
-                    style={{ background: avatarColorFor(user.id) }}
-                    aria-hidden
-                  >
-                    {user.firstName.charAt(0).toUpperCase()}
-                  </span>
-                  {user.firstName}
-                </span>
-                <span>
-                  <strong>{formatCents(totalCents)}</strong>{" "}
-                  <span className="muted">
-                    · {count} dépense{count > 1 ? "s" : ""}
-                  </span>
-                </span>
-              </div>
-              <div className="bar">
-                <div
-                  className="bar__fill"
-                  style={{
-                    width: `${(totalCents / perUser[0].totalCents) * 100}%`,
-                    background: avatarColorFor(user.id),
-                  }}
-                />
-              </div>
-            </div>
-          ))}
+          <div className="card__head">
+            <h3>Qui a dépensé quoi</h3>
+            <span className="card__head-total num">{formatCents(spentTotal)}</span>
+          </div>
+          {/* Shares of the month's total, not of the biggest spender: normalised
+              that way, the top contributor was always a full bar. */}
+          <StackBar
+            totalCents={spentTotal}
+            segments={perUser.map(({ user, totalCents, count }) => ({
+              key: user.id,
+              label: user.firstName,
+              cents: totalCents,
+              color: avatarColorFor(user.id),
+              count,
+            }))}
+          />
         </div>
       )}
 
       {expenses.length > 0 && (
         <div className="card">
-          <h3>Dépenses du mois</h3>
           <ExpenseList
+            id="budget"
+            title="Dépenses du mois"
             expenses={expenses}
             categories={dataset.categories}
             users={dataset.users}

@@ -8,8 +8,9 @@ import {
   recentTimeline,
   totalRemaining,
 } from "../../lib/budget.ts";
+import { posteColor } from "../../lib/colors.ts";
 import { currentMonth, formatMonth, prevMonth } from "../../lib/dates.ts";
-import { carryLabel } from "../../lib/labels.ts";
+import { carryLabel, remainingTone } from "../../lib/labels.ts";
 import { formatCents } from "../../lib/money.ts";
 import type { Category, Dataset } from "../../lib/types.ts";
 
@@ -37,7 +38,7 @@ export function History({ dataset }: { dataset: Dataset }) {
 
   return (
     <div>
-      <div className="chips" style={{ marginBottom: 14 }}>
+      <div className="chips chips--months">
         {months.map((m) => (
           <button
             type="button"
@@ -73,8 +74,13 @@ export function History({ dataset }: { dataset: Dataset }) {
 
       {expenses.length > 0 && (
         <div className="card">
-          <h3>Dépenses</h3>
-          <ExpenseList expenses={expenses} categories={dataset.categories} users={dataset.users} />
+          <ExpenseList
+            id="history"
+            title="Dépenses"
+            expenses={expenses}
+            categories={dataset.categories}
+            users={dataset.users}
+          />
         </div>
       )}
     </div>
@@ -111,14 +117,14 @@ function PosteRow({
       >
         <div className="poste__head">
           <span className="poste__name">
-            <span
-              className="poste__dot"
-              style={category.color ? { background: category.color } : undefined}
-            />
+            <span className="poste__dot" style={{ background: posteColor(category) }} />
             {category.name}
           </span>
+          {/* Shared with the Budget tab: this used to be a local `remaining < 0`
+              check with no warning threshold, so a poste nearly out of budget
+              showed amber there and green here. */}
           <span
-            className={`poste__remaining ${state.remainingCents < 0 ? "negative" : "positive"}`}
+            className={`poste__remaining num ${remainingTone(state.remainingCents, state.startingCents)}`}
           >
             {formatCents(state.remainingCents)}
           </span>

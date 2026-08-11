@@ -1,4 +1,5 @@
 import { categoryExpenseCounts } from "../lib/budget.ts";
+import { posteColor } from "../lib/colors.ts";
 import type { Category, Expense } from "../lib/types.ts";
 
 interface Props {
@@ -26,7 +27,7 @@ export function CategoryFilter({ expenses, categories, value, onChange }: Props)
   const active = filters.some((f) => f.category.id === value) ? value : null;
 
   return (
-    <div className="chips chips--strip" style={{ marginBottom: 12 }}>
+    <div className="chips chips--strip">
       <button
         type="button"
         className={`chip ${active === null ? "chip--active" : ""}`}
@@ -43,10 +44,7 @@ export function CategoryFilter({ expenses, categories, value, onChange }: Props)
           aria-pressed={active === category.id}
           onClick={() => onChange(category.id)}
         >
-          <span
-            className="poste__dot"
-            style={category.color ? { background: category.color } : undefined}
-          />
+          <span className="poste__dot" style={{ background: posteColor(category) }} />
           {category.name} ({count})
         </button>
       ))}

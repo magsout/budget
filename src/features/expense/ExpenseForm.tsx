@@ -3,6 +3,7 @@ import { Modal } from "../../components/Modal.tsx";
 import { useData } from "../../data/DataContext.tsx";
 import { addExpense, softDeleteExpense, updateExpense } from "../../data/firestore.ts";
 import { categoriesActiveIn, frequentExpenses } from "../../lib/budget.ts";
+import { posteColor } from "../../lib/colors.ts";
 import { currentMonth, localToday, prevMonth } from "../../lib/dates.ts";
 import { centsToInput, eurosToCents, formatCents, isValidPositiveAmount } from "../../lib/money.ts";
 import type { Dataset, Expense } from "../../lib/types.ts";
@@ -60,7 +61,8 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
   const [date, setDate] = useState(expense?.date ?? localToday());
   const [submitting, setSubmitting] = useState(false);
 
-  const selectedColor = categories.find((c) => c.id === categoryId)?.color;
+  const selected = categories.find((c) => c.id === categoryId);
+  const selectedColor = selected ? posteColor(selected) : undefined;
 
   // Habits from the last three months, offered as one-tap prefills. Only when
   // creating: in edit mode the fields already hold the values being changed.
@@ -146,7 +148,7 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
                     >
                       <span
                         className="poste__dot"
-                        style={category?.color ? { background: category.color } : undefined}
+                        style={category ? { background: posteColor(category) } : undefined}
                       />
                       {f.description ?? category?.name} · {formatCents(f.amountCents)}
                     </button>

@@ -34,7 +34,7 @@ import {
   deletedExpenses,
   monthStateFor,
 } from "../../lib/budget.ts";
-import { avatarColorFor, DEFAULT_CATEGORY_COLOR } from "../../lib/colors.ts";
+import { avatarColorFor, DEFAULT_CATEGORY_COLOR, posteColor } from "../../lib/colors.ts";
 import { currentMonth, formatDate, formatMonth, localToday, prevMonth } from "../../lib/dates.ts";
 import { datasetToJson, expensesToCsv, exportFileName } from "../../lib/export.ts";
 import { carryLabel } from "../../lib/labels.ts";
@@ -338,10 +338,7 @@ function CategoryRow({
     <div className="list-item">
       <div>
         <div className="poste__name">
-          <span
-            className="poste__dot"
-            style={category.color ? { background: category.color } : undefined}
-          />
+          <span className="poste__dot" style={{ background: posteColor(category) }} />
           <strong>{category.name}</strong>
         </div>
         <div className="muted">
@@ -429,10 +426,7 @@ function ArchivedCategoryRow({ category, dataset }: { category: Category; datase
     <div className="list-item" style={{ flexWrap: "wrap" }}>
       <div>
         <div className="poste__name">
-          <span
-            className="poste__dot"
-            style={category.color ? { background: category.color } : undefined}
-          />
+          <span className="poste__dot" style={{ background: posteColor(category) }} />
           <strong>{category.name}</strong>
         </div>
         <div className="muted">
