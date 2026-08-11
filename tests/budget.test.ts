@@ -9,10 +9,12 @@ import {
   expensesForMonth,
   filterExpensesByCategory,
   frequentExpenses,
+  type MonthState,
   monthStateFor,
   monthSummary,
   recentTimeline,
   spendByUser,
+  spentPercent,
   totalRemaining,
 } from "../src/lib/budget.ts";
 import type {
@@ -576,5 +578,39 @@ describe("categoryExpenseCounts (dashboard filter)", () => {
     });
     const counts = categoryExpenseCounts(expensesForMonth(ds, "2026-07"), categories);
     expect(counts.map((c) => [c.category.id, c.count])).toEqual([["courses", 1]]);
+  });
+});
+
+const state = (spentCents: number, startingCents: number): MonthState => ({
+  month: "2026-08",
+  initialCents: startingCents,
+  carryInCents: 0,
+  carryAdjusted: false,
+  startingCents,
+  spentCents,
+  remainingCents: startingCents - spentCents,
+});
+
+describe("spentPercent", () => {
+  it("is the share of the available budget that is spent", () => {
+    expect(spentPercent(state(16160, 454550))).toBeCloseTo(3.555, 2);
+    expect(spentPercent(state(32800, 65600))).toBe(50);
+  });
+
+  it("clamps at 100 rather than drawing past full", () => {
+    // The real "Autres": 1 646 € spent on a 900 € budget. The bar cannot show
+    // the overshoot — the tone and the figure do.
+    expect(spentPercent(state(164600, 90000))).toBe(100);
+  });
+
+  it("is all-or-nothing when nothing was available", () => {
+    expect(spentPercent(state(0, 0))).toBe(0);
+    expect(spentPercent(state(2400, 0))).toBe(100);
+    expect(spentPercent(state(2400, -500))).toBe(100);
+  });
+
+  it("never goes below 0", () => {
+    // A corrected expense can make a month's spending negative.
+    expect(spentPercent(state(-2400, 65600))).toBe(0);
   });
 });

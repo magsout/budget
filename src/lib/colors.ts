@@ -37,3 +37,41 @@ export function avatarColorFor(seed: string): string {
   }
   return CATEGORY_COLORS[Math.abs(hash) % CATEGORY_COLORS.length];
 }
+
+/**
+ * FNV-1a, 32-bit. Deliberately NOT `avatarColorFor`'s `hash * 31 + c`: with a
+ * 10-color palette that one degenerates, because 31 ≡ 1 (mod 10), so the index
+ * ends up being the sum of the char codes mod 10 — "courses" and "autres"
+ * collide for exactly that reason. The 16777619 multiplier spreads the low bits
+ * across the whole word, so the palette index depends on every byte.
+ *
+ * `avatarColorFor` is left alone on purpose: it already decides the color of
+ * every existing avatar, and remixing it would silently recolor people.
+ */
+function mix32(seed: string): number {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < seed.length; i++) {
+    hash ^= seed.charCodeAt(i);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+/**
+ * The color to paint a poste's dot with. Two jobs, both of which used to be done
+ * (badly) by the `category.color ? … : undefined` ternary repeated at eight call
+ * sites:
+ *
+ * - Validate. A corrupt stored value ("bleu", an old format) produced an invalid
+ *   `background` and a dot painted with nothing; now it degrades to the palette.
+ * - Give uncolored postes their own hue instead of all sharing `--primary`,
+ *   without adding a stored field to migrate.
+ *
+ * Collisions are still possible — ten colors cannot separate arbitrarily many
+ * ids — so this is a nicety, not a guarantee. Nothing may rely on the dot alone
+ * to tell two postes apart; that is why every row keeps its poste name in text.
+ */
+export function posteColor(category: { id: string; color?: string | null }): string {
+  if (isHexColor(category.color)) return category.color;
+  return CATEGORY_COLORS[mix32(category.id) % CATEGORY_COLORS.length];
+}

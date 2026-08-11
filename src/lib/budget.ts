@@ -191,6 +191,23 @@ export function monthSummary(dataset: Dataset, month: MonthKey): CategorySummary
     }));
 }
 
+/**
+ * How much of a poste's available budget is spent, as 0..100 for a bar width.
+ *
+ * Clamped at 100, so overspending is NOT conveyed by this number — the bar cannot
+ * grow past full. That is what `remainingTone` (and the figure itself going red)
+ * is for; a caller that needs to show the overshoot must say so in words.
+ *
+ * With nothing available, "spent" is all-or-nothing rather than a division by
+ * zero: any spending on a poste with no budget is 100% of it.
+ */
+export function spentPercent(state: MonthState): number {
+  if (state.startingCents > 0) {
+    return Math.min(100, Math.max(0, (state.spentCents / state.startingCents) * 100));
+  }
+  return state.spentCents > 0 ? 100 : 0;
+}
+
 /** Total remaining (sum of every active category's remaining) for a month. */
 export function totalRemaining(dataset: Dataset, month: MonthKey): number {
   return monthSummary(dataset, month).reduce((sum, s) => sum + s.state.remainingCents, 0);
