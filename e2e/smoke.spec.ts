@@ -520,3 +520,115 @@ test.describe("Compte", () => {
     await expect(page.locator(".stackbar")).toBeVisible();
   });
 });
+
+/*
+ * DOM measurements go through `page.evaluate` in its STRING form, as at line 90:
+ * tsconfig.node.json gives this project `lib: ["ES2023"]` with no DOM, deliberately
+ * (e2e imports nothing from src/). A string expression is evaluated in the page and
+ * needs no DOM types here.
+ */
+const measure = (page: Page, expr: string) => page.evaluate(`(() => (${expr}))()`);
+
+test.describe("Liste par journée · géométrie", () => {
+  // These were all SILENT failures: nothing threw, every number was right, the list
+  // just read as an undifferentiated ladder. Only measurement catches them.
+
+  test("la bande de l'en-tête affleure les deux bords de la carte", async ({ page }) => {
+    await page.goto("fixture.html");
+    // `width: 100%` + `margin: 0 -16px` over-constrains the box, so the used value
+    // silently drops margin-right and the band stops short on one side only. Dropping
+    // the width is not the fix either — a <button> shrink-wraps instead of stretching.
+    const gaps = (await measure(
+      page,
+      `(() => {
+        const head = document.querySelector(".daygroup__head");
+        const h = head.getBoundingClientRect();
+        const c = head.closest(".card").getBoundingClientRect();
+        return { left: h.left - c.left, right: c.right - h.right };
+      })()`,
+    )) as { left: number; right: number };
+    expect(Math.abs(gaps.left)).toBeLessThanOrEqual(1.5);
+    expect(Math.abs(gaps.right)).toBeLessThanOrEqual(1.5);
+  });
+
+  test("la date tient le bord gauche du groupe qu'elle coiffe", async ({ page }) => {
+    await page.goto("fixture.html");
+    // Behind a caret column the date started 22px deeper than the rows it governs,
+    // so it could not read as their anchor.
+    const dx = (await measure(
+      page,
+      `Math.abs(
+        document.querySelector(".daygroup__dnum").getBoundingClientRect().left -
+        document.querySelector(".xrow").getBoundingClientRect().left
+      )`,
+    )) as number;
+    expect(dx).toBeLessThanOrEqual(2);
+  });
+
+  test("le total du jour reste moins fort que les montants des lignes", async ({ page }) => {
+    await page.goto("fixture.html");
+    // With one row per day the two print the SAME figure a line apart; at equal
+    // weight the pair reads as a mistake rather than as a total.
+    const sizes = (await measure(
+      page,
+      `(() => {
+        const px = (s) => Number.parseFloat(getComputedStyle(document.querySelector(s)).fontSize);
+        return { day: px(".daygroup__total"), row: px(".xrow__amount") };
+      })()`,
+    )) as { day: number; row: number };
+    expect(sizes.day).toBeLessThan(sizes.row);
+  });
+});
+
+test.describe("Liste par journée · replier", () => {
+  test("replier laisse le résultat à l'écran au lieu de faire sauter la page", async ({ page }) => {
+    // Folding unmounts day bodies, the document shrinks and the browser clamps the
+    // scroll offset: the reader's content used to jump 176px and the tap read as
+    // "nothing happened". Preserving scrollY cannot fix that (at the document maximum
+    // the shorter page caps the offset), so the list anchors on its own head instead.
+    await page.goto("fixture.html");
+    await page.evaluate("window.scrollTo(0, document.body.scrollHeight)");
+    await page.waitForTimeout(200);
+
+    await page.getByRole("button", { name: "Tout replier" }).click();
+    await page.waitForTimeout(700); // smooth scroll settles
+
+    const head = page.locator(".card__head").filter({ hasText: "Dépenses du mois" });
+    const box = await head.boundingBox();
+    const tab = await page.locator(".tabbar").boundingBox();
+    const h = page.viewportSize()?.height ?? 0;
+
+    // On screen, and clear of the floating tab bar that swallows taps down there.
+    expect(box?.y ?? -1).toBeGreaterThanOrEqual(0);
+    expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThan(Math.min(tab?.y ?? h, h));
+    await expect(page.locator(".daygroup__body")).toHaveCount(1);
+  });
+
+  test("un en-tête épinglé masque les lignes qui défilent dessous", async ({ page }) => {
+    // The sticky header's OPAQUE background is what makes rows disappear behind it.
+    // A short viewport is what gives the fixture's list enough travel to pin one.
+    await page.setViewportSize({ width: 412, height: 360 });
+    await page.goto("fixture.html");
+    await page.evaluate(
+      `(() => {
+        const hs = document.querySelectorAll(".daygroup__head");
+        window.scrollTo(0, hs[1].getBoundingClientRect().top + window.scrollY + 24);
+      })()`,
+    );
+    await page.waitForTimeout(300);
+    const pinned = (await measure(
+      page,
+      `(() => {
+        const hs = [...document.querySelectorAll(".daygroup__head")];
+        const stuck = hs.find((el) => Math.abs(el.getBoundingClientRect().top) < 2);
+        if (!stuck) return null;
+        const cs = getComputedStyle(stuck);
+        return { bg: cs.backgroundColor, z: cs.zIndex, pos: cs.position };
+      })()`,
+    )) as { bg: string; z: string; pos: string } | null;
+
+    expect(pinned, "no header pinned — the sticky mechanism is not engaging").not.toBeNull();
+    expect(pinned?.pos).toBe("sticky");
+    expect(pinned?.bg).not.toBe("rgba(0, 0, 0, 0)");
+  });
+});

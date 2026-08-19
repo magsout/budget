@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { filterExpensesByCategory } from "../lib/budget.ts";
 import type { DateKey } from "../lib/dates.ts";
 import { defaultOpenDays, groupExpensesByDay } from "../lib/grouping.ts";
@@ -80,15 +80,30 @@ export function ExpenseList({ id, title, expenses, categories, users, onEdit }: 
     return (uid: string) => byId.get(uid);
   }, [users]);
 
+  /**
+   * Folding unmounts day bodies, so the document gets shorter — 1577px to 1401px on
+   * the fixture — and the browser clamps the scroll offset. The reader's content
+   * jumped 176px and the tap read as "nothing happened".
+   *
+   * Preserving `scrollY` across the toggle CANNOT fix that: in the reported case the
+   * reader was at the very bottom (738 of a 738 maximum), and the shorter document
+   * caps the offset at 562 whatever we ask for. So instead of trying to keep the
+   * viewport still, we anchor on this list's own head — which sits ABOVE everything
+   * the fold removes, so scrolling to it is always achievable — and the result of
+   * the tap is on screen, from the top, every time.
+   */
+  const headRef = useRef<HTMLDivElement>(null);
+
   const toggleFolded = () => {
     const next = !folded;
     setFolded(next);
     writeListFolded(window.localStorage, id, next);
+    headRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
   };
 
   return (
     <>
-      <div className="card__head">
+      <div className="card__head" ref={headRef}>
         <h3>{title}</h3>
         {/* The month's total, not the filtered one — the chips already announce
             how many rows the current filter left. Kept a direct child of the head

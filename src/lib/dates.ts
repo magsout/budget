@@ -125,6 +125,26 @@ export function formatDayShort(date: DateKey, locale = "fr-FR"): string {
   );
 }
 
+/**
+ * The pieces of a day header's date, so the day NUMBER can be typeset as the
+ * anchor of the group while the words stay secondary.
+ *
+ * Three separate formatter calls rather than one combined request: asking Intl for
+ * `{ weekday, month }` together yields "ven. (mois: août)" in fr-FR, because a
+ * non-contiguous field set makes it fall back to a labelled form. Each call has its
+ * own cache key (the key covers weekday/day/month/year), so all three are cached.
+ */
+export function formatDayParts(date: DateKey, locale = "fr-FR"): { day: string; words: string } {
+  const [y, m, d] = date.split("-").map(Number);
+  const at = new Date(y, m - 1, d);
+  const weekday = dateFormatter(locale, { weekday: "short" }).format(at);
+  const month = dateFormatter(locale, { month: "short" }).format(at);
+  return {
+    day: dateFormatter(locale, { day: "numeric" }).format(at),
+    words: `${weekday} ${month}`,
+  };
+}
+
 /** True when the date key is today, in the browser's local timezone. */
 export function isToday(date: DateKey, now: Date = new Date()): boolean {
   return date === localToday(now);
