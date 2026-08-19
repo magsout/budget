@@ -94,12 +94,43 @@ export interface Income {
   deletedAt: string | null;
 }
 
+/**
+ * A movement of money between the postes of one month. Balanced by construction:
+ * the amount is always positive and the direction lives in `fromCategoryId` /
+ * `toCategoryId`, so a transfer cannot unbalance the books nor half-disappear —
+ * one doc is the whole movement, and deleting it undoes both sides at once.
+ *
+ * `fromCategoryId === null` means the money came from OUTSIDE the postes (an
+ * apport); that is the only nullable field the fold reads. `fromIncomeId` is
+ * attribution only — which one-off income funded the apport, so the Compte tab
+ * can show that money as consumed rather than still available.
+ *
+ * Two needs, one shape: redirecting a report from an important poste onto a less
+ * important one is the same gesture as topping a poste up from a bonus, the
+ * source apart.
+ */
+export interface BudgetMovement {
+  id: string;
+  month: MonthKey; // "YYYY-MM" — the month whose balances it shifts
+  /** Poste the money leaves; null = it comes from outside (an apport). */
+  fromCategoryId: string | null;
+  /** Poste the money lands in. */
+  toCategoryId: string;
+  /** One-off income funding an apport. Attribution only, never load-bearing. */
+  fromIncomeId: string | null;
+  amountCents: number; // always > 0 — the direction is in from/to, not the sign
+  label: string | null;
+  createdAt: string; // ISO timestamp
+  deletedAt: string | null; // soft delete
+}
+
 /** The full app dataset loaded into memory (tiny at household scale). */
 export interface Dataset {
   users: User[];
   categories: Category[];
   budgetVersions: BudgetVersion[];
   carryOverrides: CarryOverride[];
+  budgetMovements: BudgetMovement[];
   expenses: Expense[];
   recurringExpenses: RecurringExpense[];
   incomes: Income[];

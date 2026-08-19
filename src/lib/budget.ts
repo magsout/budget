@@ -1,4 +1,5 @@
 import { type MonthKey, monthOf, monthRange } from "./dates.ts";
+import { movementMonthsFor, movementNetFor } from "./movements.ts";
 import type { BudgetVersion, CarryOverride, Category, Dataset, Expense, User } from "./types.ts";
 
 /** State of one category for one month. */
@@ -10,7 +11,11 @@ export interface MonthState {
   carryInCents: number;
   /** True when `carryInCents` was forced by hand rather than folded from M-1. */
   carryAdjusted: boolean;
-  /** initial + carryIn — the budget actually available this month. */
+  /** Brought in from a one-off income this month (an apport). Always >= 0. */
+  apportCents: number;
+  /** Net of report reallocations with other postes this month. Signed. */
+  transferCents: number;
+  /** initial + carryIn + apport + transfer — the budget actually available. */
   startingCents: number;
   /** Total spent in this category this month. */
   spentCents: number;
@@ -101,6 +106,7 @@ export function firstActivityMonth(
   for (const e of dataset.expenses) {
     if (e.categoryId === categoryId && !e.deletedAt) consider(monthOf(e.date));
   }
+  for (const m of movementMonthsFor(dataset.budgetMovements, categoryId)) consider(m);
 
   return earliest ?? fallback;
 }
@@ -114,6 +120,11 @@ export function firstActivityMonth(
  * A carry override replaces the folded carry-in for its month only; the fold
  * then resumes from the resulting remaining, so a reset in month M leaves the
  * months before M untouched and lets M+1 carry over as usual.
+ *
+ * Movements (lib/movements.ts) are added on top of the carry-in and are then
+ * ABSORBED by the fold: a debt moved from one poste to another in month M stays
+ * moved in M+1, because M's remaining already carries it. That is deliberate —
+ * redirecting a report is a decision taken once, not one to retake every month.
  */
 export function computeTimeline(
   dataset: Dataset,
@@ -129,13 +140,20 @@ export function computeTimeline(
     const carryInCents = override ?? carry;
     const initialCents = budgetVersionFor(dataset.budgetVersions, categoryId, month);
     const spentCents = spentForCategoryMonth(dataset.expenses, categoryId, month);
-    const startingCents = initialCents + carryInCents;
+    const { apportCents, transferCents } = movementNetFor(
+      dataset.budgetMovements,
+      categoryId,
+      month,
+    );
+    const startingCents = initialCents + carryInCents + apportCents + transferCents;
     const remainingCents = startingCents - spentCents;
     rows.push({
       month,
       initialCents,
       carryInCents,
       carryAdjusted: override !== null,
+      apportCents,
+      transferCents,
       startingCents,
       spentCents,
       remainingCents,
@@ -175,6 +193,8 @@ function emptyState(month: MonthKey): MonthState {
     initialCents: 0,
     carryInCents: 0,
     carryAdjusted: false,
+    apportCents: 0,
+    transferCents: 0,
     startingCents: 0,
     spentCents: 0,
     remainingCents: 0,
@@ -369,6 +389,7 @@ export function earliestMonth(dataset: Dataset, fallback: MonthKey): MonthKey {
   for (const c of dataset.categories) consider(monthKeyOfIso(c.createdAt));
   for (const v of dataset.budgetVersions) consider(v.effectiveFrom);
   for (const o of dataset.carryOverrides) consider(o.month);
+  for (const m of dataset.budgetMovements) if (!m.deletedAt) consider(m.month);
   for (const e of dataset.expenses) if (!e.deletedAt) consider(monthOf(e.date));
   return earliest ?? fallback;
 }

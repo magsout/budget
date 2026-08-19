@@ -21,6 +21,7 @@ export const carryOverridesCol = collection(db, "carryOverrides");
 export const expensesCol = collection(db, "expenses");
 export const recurringExpensesCol = collection(db, "recurringExpenses");
 export const incomesCol = collection(db, "incomes");
+export const budgetMovementsCol = collection(db, "budgetMovements");
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -159,6 +160,80 @@ export async function setCarryOverride(
 /** Drop the override so the carry-in is computed from the ledger again. */
 export async function clearCarryOverride(categoryId: string, month: MonthKey): Promise<void> {
   await deleteDoc(carryOverrideRef(categoryId, month));
+}
+
+/* ---- budget movements --------------------------------------------------- */
+
+export interface NewMovementInput {
+  month: MonthKey;
+  /** null = an apport, i.e. money brought in from outside the postes. */
+  fromCategoryId: string | null;
+  toCategoryId: string;
+  fromIncomeId?: string | null;
+  amountCents: number;
+  label?: string | null;
+}
+
+/** Apports come from outside; transfers move a report between two postes. */
+export type MovementKind = "apport" | "transfer";
+
+function kindOf(m: { fromCategoryId: string | null }): MovementKind {
+  return m.fromCategoryId === null ? "apport" : "transfer";
+}
+
+/**
+ * Replace a month's movements of one kind with `inputs`, in a SINGLE batch. Two
+ * properties come from doing it this way:
+ *
+ * - The books never pass through an unbalanced state, offline included. A
+ *   repartition lands whole or not at all, so no snapshot can ever show money
+ *   that left one poste without arriving in another.
+ * - Re-validating the screen is idempotent instead of duplicating: the previous
+ *   set is retired in the same commit that writes the new one.
+ *
+ * The old set is soft-deleted rather than removed, like expenses — the gesture
+ * that patched a hole stays as much a part of the record as the hole itself.
+ * Ids are auto-generated (unlike carry overrides, which are one per
+ * category+month): several movements can legitimately target the same poste in
+ * the same month, so there is no natural key to derive an id from.
+ */
+export async function replaceBudgetMovements(
+  month: MonthKey,
+  kind: MovementKind,
+  inputs: NewMovementInput[],
+): Promise<void> {
+  const existing = await getDocs(query(budgetMovementsCol, where("month", "==", month)));
+  const batch = writeBatch(db);
+  const now = nowIso();
+
+  for (const d of existing.docs) {
+    const row = d.data() as { fromCategoryId: string | null; deletedAt: string | null };
+    if (row.deletedAt) continue;
+    if (kindOf(row) !== kind) continue;
+    batch.update(d.ref, { deletedAt: now });
+  }
+
+  for (const input of inputs) {
+    if (input.amountCents <= 0) continue;
+    if (input.fromCategoryId === input.toCategoryId) continue;
+    batch.set(doc(budgetMovementsCol), {
+      month: input.month,
+      fromCategoryId: input.fromCategoryId,
+      toCategoryId: input.toCategoryId,
+      fromIncomeId: input.fromIncomeId ?? null,
+      amountCents: input.amountCents,
+      label: input.label?.trim() ? input.label.trim() : null,
+      createdAt: now,
+      deletedAt: null,
+    });
+  }
+
+  await batch.commit();
+}
+
+/** Retire one movement. Both of its sides go at once — that is the point of one doc. */
+export async function softDeleteBudgetMovement(id: string): Promise<void> {
+  await updateDoc(doc(budgetMovementsCol, id), { deletedAt: nowIso() });
 }
 
 /* ---- expenses ----------------------------------------------------------- */

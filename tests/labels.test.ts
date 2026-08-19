@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { carryLabel, remainingTone } from "../src/lib/labels.ts";
+import { carryLabel, originLabel, remainingTone } from "../src/lib/labels.ts";
+import type { MonthState } from "../src/lib/budget.ts";
 
 describe("carryLabel", () => {
   it("says nothing when there is no report", () => {
@@ -51,5 +52,63 @@ describe("remainingTone", () => {
     // 0 of 0 is not "nearly out" — there was never a budget to run down.
     expect(remainingTone(0, 0)).toBe("positive");
     expect(remainingTone(-500, 0)).toBe("negative");
+  });
+});
+
+const state = (over: Partial<MonthState> = {}): MonthState => ({
+  month: "2026-09",
+  initialCents: 40000,
+  carryInCents: 0,
+  carryAdjusted: false,
+  apportCents: 0,
+  transferCents: 0,
+  startingCents: 40000,
+  spentCents: 0,
+  remainingCents: 40000,
+  ...over,
+});
+
+describe("originLabel", () => {
+  it("says nothing when nothing happened", () => {
+    expect(originLabel(state())).toBeNull();
+  });
+
+  it("falls back to the report alone when there is no movement", () => {
+    expect(originLabel(state({ carryInCents: -1250 }))).toBe(
+      carryLabel({
+        carryInCents: -1250,
+        carryAdjusted: false,
+      }),
+    );
+  });
+
+  it("names an apport", () => {
+    const label = originLabel(state({ apportCents: 15000 }));
+    expect(label).toContain("apport");
+    expect(label).toContain("150,00");
+  });
+
+  it("distinguishes receiving from giving up a report", () => {
+    expect(originLabel(state({ transferCents: 10000 }))).toContain("reçu");
+    const given = originLabel(state({ transferCents: -10000 }));
+    expect(given).toContain("cédé");
+    // The figure reads positive: "cédé −100 €" would say the opposite.
+    expect(given).toContain("100,00");
+    expect(given).not.toContain("-100,00");
+  });
+
+  it("pairs the report with the movement", () => {
+    const label = originLabel(state({ carryInCents: -10000, transferCents: 10000 }));
+    expect(label).toContain("Report");
+    expect(label).toContain("reçu");
+  });
+
+  it("collapses to a net past two clauses, so the meta line cannot crowd", () => {
+    const label = originLabel(
+      state({ carryInCents: -20000, apportCents: 15000, transferCents: 10000 }),
+    );
+    expect(label).toContain("ajusté de");
+    expect(label).toContain("250,00");
+    expect(label).not.toContain("reçu");
   });
 });

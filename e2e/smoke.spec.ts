@@ -25,6 +25,17 @@ async function openSettings(page: Page) {
   await expect(page.getByRole("heading", { name: "Postes de dépenses" })).toBeVisible();
 }
 
+/* `centsToInput` is ungrouped ("6300,00"), so a report field round-trips through
+   a plain parse — no locale separators to strip. */
+const cents = (v: string) => Math.round(Number(v.replace(",", ".")) * 100);
+const euros = (c: number) => (c / 100).toFixed(2).replace(".", ",");
+
+async function openRebalance(page: Page) {
+  await page.locator(".account-trigger").click();
+  await page.getByRole("button", { name: "Répartition" }).click();
+  await expect(page.getByRole("heading", { name: "Répartir le report" })).toBeVisible();
+}
+
 test.describe("Budget", () => {
   test("le tableau de bord s'affiche sans erreur console", async ({ page }) => {
     const errors = watchConsole(page);
@@ -378,5 +389,134 @@ test.describe("Réglages", () => {
     const who = page.locator("#user");
     await expect(who.getByRole("option")).toHaveCount(2);
     await expect(who.getByRole("option", { name: "Colocataire" })).toHaveCount(0);
+  });
+});
+
+test.describe("Répartition", () => {
+  test("l'écran s'ouvre sans erreur console et porte son sélecteur de mois", async ({ page }) => {
+    const errors = watchConsole(page);
+    await page.goto("fixture.html");
+    await openRebalance(page);
+    // Its own stepper, so a report can be sorted out before the month lands.
+    await expect(page.locator(".month-nav")).toBeVisible();
+    expect(errors).toEqual([]);
+  });
+
+  test("le total conservé conditionne l'enregistrement", async ({ page }) => {
+    await page.goto("fixture.html");
+    await openRebalance(page);
+
+    const save = page.getByRole("button", { name: "Enregistrer" }).first();
+    // Nothing touched yet: nothing to save.
+    await expect(save).toBeDisabled();
+
+    const fields = page.locator('input[aria-label^="Report ajusté"]');
+    const a = fields.nth(0);
+    const b = fields.nth(1);
+    const aStart = cents(await a.inputValue());
+    const bStart = cents(await b.inputValue());
+
+    // Give one poste 100 € it was not owed and take it from nobody: that is
+    // money appearing out of nothing, and the screen must refuse to write it.
+    await a.fill(euros(aStart + 10000));
+    await expect(page.getByText(/Écart de/)).toBeVisible();
+    await expect(save).toBeDisabled();
+
+    // Take it off another poste and the books balance — same total, different
+    // holder, which is the whole point of the gesture.
+    await b.fill(euros(bStart - 10000));
+    await expect(page.getByText("Total conservé.")).toBeVisible();
+    await expect(save).toBeEnabled();
+
+    // Réinitialiser restores the computed reports.
+    await page.getByRole("button", { name: "Réinitialiser" }).click();
+    await expect(a).toHaveValue(euros(aStart));
+    await expect(b).toHaveValue(euros(bStart));
+    await expect(save).toBeDisabled();
+  });
+
+  test("« Proposer » ne déséquilibre jamais le total", async ({ page }) => {
+    await page.goto("fixture.html");
+    await openRebalance(page);
+
+    // Whatever the month's figures, a proposal only ever moves what it takes.
+    await page.getByRole("button", { name: "Proposer" }).click();
+    await expect(page.getByText(/Écart de/)).toHaveCount(0);
+    await page.getByRole("button", { name: "Mois précédent" }).click();
+    await page.getByRole("button", { name: "Proposer" }).click();
+    await expect(page.getByText(/Écart de/)).toHaveCount(0);
+  });
+
+  test("les mouvements du mois sont listés et annulables", async ({ page }) => {
+    await page.goto("fixture.html");
+    await openRebalance(page);
+    // The fixture's movements sit on the current month; step back one from the
+    // default (next month) to reach them.
+    await page.getByRole("button", { name: "Mois précédent" }).click();
+
+    const movements = page.locator(".card", {
+      has: page.getByRole("heading", { name: /Mouvements/ }),
+    });
+    await expect(movements).toBeVisible();
+    // Both kinds are named for what they are, not shown as one anonymous figure.
+    await expect(movements.getByText("Apport", { exact: false }).first()).toBeVisible();
+    await expect(movements.getByRole("button", { name: "Annuler" }).first()).toBeVisible();
+  });
+
+  test("un apport se répartit au prorata sans dépasser le pot", async ({ page }) => {
+    await page.goto("fixture.html");
+    await openRebalance(page);
+    await page.getByRole("button", { name: "Mois précédent" }).click();
+
+    const card = page.locator(".card", {
+      has: page.getByRole("heading", { name: "Placer un apport" }),
+    });
+    const save = card.getByRole("button", { name: "Enregistrer" });
+    await expect(save).toBeDisabled();
+
+    await card.getByRole("button", { name: "Répartir au prorata" }).click();
+
+    // Each poste gets exactly its shortfall and no more: the surplus stays for
+    // the user to place rather than inflating a budget nobody asked to inflate.
+    const field = card.locator('input[aria-label^="Apport sur"]').first();
+    const need = cents(
+      (await card.locator(".mv-row__from").first().textContent())?.replace(/[^\d,-]/g, "") ?? "0",
+    );
+    expect(cents(await field.inputValue())).toBe(need);
+    await expect(card.getByText(/Reste à placer/)).toBeVisible();
+    await expect(save).toBeEnabled();
+
+    // Overshooting the pot is refused rather than written.
+    await field.fill("99999,00");
+    await expect(card.getByText(/de trop/)).toBeVisible();
+    await expect(save).toBeDisabled();
+
+    await card.getByRole("button", { name: "Vider" }).click();
+    await expect(field).toHaveValue("");
+    await expect(save).toBeDisabled();
+  });
+});
+
+test.describe("Budget › bandeau", () => {
+  test("le bandeau annonce le mois qui héritera du report et y mène", async ({ page }) => {
+    await page.goto("fixture.html");
+    const nudge = page.locator(".card--nudge");
+    // Framed on the month that INHERITS the report, not the one showing it: by
+    // the time a negative carry-in is on screen the decision is already late.
+    await expect(nudge).toContainText("démarrera");
+    await expect(nudge).toContainText("dans le rouge");
+    await nudge.click();
+    await expect(page.getByRole("heading", { name: "Répartir le report" })).toBeVisible();
+  });
+});
+
+test.describe("Compte", () => {
+  test("la cascade compte les apports et marque le revenu ponctuel", async ({ page }) => {
+    await page.goto("fixture.html");
+    await page.locator(".tabbar").getByRole("button", { name: "Compte" }).click();
+    // The one-off is named as such, so a bonus is not read as a salary.
+    await expect(page.getByText("ponctuel").first()).toBeVisible();
+    // And the bar accounts for money already assigned into the postes.
+    await expect(page.locator(".stackbar")).toBeVisible();
   });
 });

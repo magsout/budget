@@ -1,6 +1,7 @@
 import { type DocumentData, onSnapshot, type QuerySnapshot } from "firebase/firestore";
 import { createContext, type ReactNode, use, useEffect, useMemo, useRef, useState } from "react";
 import type {
+  BudgetMovement,
   BudgetVersion,
   CarryOverride,
   Category,
@@ -11,6 +12,7 @@ import type {
   User,
 } from "../lib/types.ts";
 import {
+  budgetMovementsCol,
   budgetVersionsCol,
   carryOverridesCol,
   categoriesCol,
@@ -37,6 +39,7 @@ const EMPTY: Dataset = {
   categories: [],
   budgetVersions: [],
   carryOverrides: [],
+  budgetMovements: [],
   expenses: [],
   recurringExpenses: [],
   incomes: [],
@@ -47,6 +50,7 @@ type CollectionKey =
   | "categories"
   | "budgetVersions"
   | "carryOverrides"
+  | "budgetMovements"
   | "expenses"
   | "recurringExpenses"
   | "incomes";
@@ -67,6 +71,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
   const [categories, setCategories] = useState<Category[]>([]);
   const [budgetVersions, setBudgetVersions] = useState<BudgetVersion[]>([]);
   const [carryOverrides, setCarryOverrides] = useState<CarryOverride[]>([]);
+  const [budgetMovements, setBudgetMovements] = useState<BudgetMovement[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [recurringExpenses, setRecurringExpenses] = useState<RecurringExpense[]>([]);
   const [incomes, setIncomes] = useState<Income[]>([]);
@@ -78,6 +83,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     categories: false,
     budgetVersions: false,
     carryOverrides: false,
+    budgetMovements: false,
     expenses: false,
     recurringExpenses: false,
     incomes: false,
@@ -91,6 +97,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     categories: true,
     budgetVersions: true,
     carryOverrides: true,
+    budgetMovements: true,
     expenses: true,
     recurringExpenses: true,
     incomes: true,
@@ -100,6 +107,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
     categories: false,
     budgetVersions: false,
     carryOverrides: false,
+    budgetMovements: false,
     expenses: false,
     recurringExpenses: false,
     incomes: false,
@@ -141,6 +149,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       subscribe<Category>(categoriesCol, "categories", setCategories),
       subscribe<BudgetVersion>(budgetVersionsCol, "budgetVersions", setBudgetVersions),
       subscribe<CarryOverride>(carryOverridesCol, "carryOverrides", setCarryOverrides),
+      subscribe<BudgetMovement>(budgetMovementsCol, "budgetMovements", setBudgetMovements),
       subscribe<Expense>(expensesCol, "expenses", setExpenses),
       subscribe<RecurringExpense>(recurringExpensesCol, "recurringExpenses", setRecurringExpenses),
       subscribe<Income>(incomesCol, "incomes", setIncomes),
@@ -157,6 +166,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
         categories,
         budgetVersions,
         carryOverrides,
+        budgetMovements,
         expenses,
         recurringExpenses,
         incomes,
@@ -172,6 +182,7 @@ export function DataProvider({ children }: { children: ReactNode }) {
       categories,
       budgetVersions,
       carryOverrides,
+      budgetMovements,
       expenses,
       recurringExpenses,
       incomes,

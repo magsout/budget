@@ -46,14 +46,9 @@ import {
 } from "../../lib/money.ts";
 import { formatCents } from "../../lib/money.ts";
 import { moveInList } from "../../lib/order.ts";
+import { syncErrorMessage } from "../../lib/sync.ts";
 import type { Category, Dataset, Income, RecurringExpense, User } from "../../lib/types.ts";
 import { activeUsers } from "../../lib/users.ts";
-
-/** Route a terminal write failure to the shared error banner. Offline writes never
- * reject here — Firestore queues them — so this fires only on genuine errors. */
-function syncErrorMessage(context: string, err: unknown): string {
-  return `Échec de synchronisation (${context}) : ${err instanceof Error ? err.message : String(err)}`;
-}
 
 export function Config({ dataset }: { dataset: Dataset }) {
   return (
@@ -574,13 +569,23 @@ function CashflowSection({
   const [description, setDescription] = useState("");
   const [startMonth, setStartMonth] = useState("");
   const [endMonth, setEndMonth] = useState("");
+  // A one-off is just a window one month wide — the same two bounds, set together.
+  // Offered as a checkbox because typing the same month twice is the kind of
+  // duplication a reader assumes is a mistake.
+  const [oneOff, setOneOff] = useState(false);
 
   const list = items
     .filter((it) => !it.deletedAt)
     .toSorted((a, b) => b.amountCents - a.amountCents || a.name.localeCompare(b.name));
 
-  const rangeInvalid = startMonth !== "" && endMonth !== "" && startMonth > endMonth;
-  const canAdd = name.trim().length > 0 && isValidPositiveAmount(amount) && !rangeInvalid;
+  const rangeInvalid = !oneOff && startMonth !== "" && endMonth !== "" && startMonth > endMonth;
+  // A one-off needs its month: with no bound it would repeat every month forever,
+  // which is the opposite of what the checkbox promises.
+  const canAdd =
+    name.trim().length > 0 &&
+    isValidPositiveAmount(amount) &&
+    !rangeInvalid &&
+    (!oneOff || startMonth !== "");
 
   const onAdd = (e: FormEvent) => {
     e.preventDefault();
@@ -590,13 +595,14 @@ function CashflowSection({
       amountCents: eurosToCents(amount),
       description: description || null,
       startMonth: startMonth || null,
-      endMonth: endMonth || null,
+      endMonth: oneOff ? startMonth : endMonth || null,
     }).catch((err: unknown) => notifyError(syncErrorMessage(errorContext, err)));
     setName("");
     setAmount("");
     setDescription("");
     setStartMonth("");
     setEndMonth("");
+    setOneOff(false);
   };
 
   return (
@@ -652,10 +658,19 @@ function CashflowSection({
             onChange={(e) => setDescription(e.target.value)}
           />
         </div>
+        <label className="check" htmlFor={`${uid}-oneoff`}>
+          <input
+            id={`${uid}-oneoff`}
+            type="checkbox"
+            checked={oneOff}
+            onChange={(e) => setOneOff(e.target.checked)}
+          />
+          Ponctuel (un seul mois)
+        </label>
         <div className="row">
           <div className="field">
             <label className="field__label" htmlFor={`${uid}-start`}>
-              Début (optionnel)
+              {oneOff ? "Mois" : "Début (optionnel)"}
             </label>
             <input
               id={`${uid}-start`}
@@ -665,18 +680,20 @@ function CashflowSection({
               onChange={(e) => setStartMonth(e.target.value)}
             />
           </div>
-          <div className="field">
-            <label className="field__label" htmlFor={`${uid}-end`}>
-              Fin (optionnel)
-            </label>
-            <input
-              id={`${uid}-end`}
-              type="month"
-              className="input"
-              value={endMonth}
-              onChange={(e) => setEndMonth(e.target.value)}
-            />
-          </div>
+          {!oneOff && (
+            <div className="field">
+              <label className="field__label" htmlFor={`${uid}-end`}>
+                Fin (optionnel)
+              </label>
+              <input
+                id={`${uid}-end`}
+                type="month"
+                className="input"
+                value={endMonth}
+                onChange={(e) => setEndMonth(e.target.value)}
+              />
+            </div>
+          )}
         </div>
         {rangeInvalid && <p className="muted negative">La fin doit être après le début.</p>}
         <button type="submit" className="btn btn--primary btn--block" disabled={!canAdd}>

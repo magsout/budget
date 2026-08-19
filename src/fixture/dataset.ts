@@ -96,9 +96,40 @@ export const FIXTURE_DATASET: Dataset = {
     { id: "v4", categoryId: "maison", amountCents: 10000, effectiveFrom: "2026-01" },
     { id: "v5", categoryId: "vacances", amountCents: 30000, effectiveFrom: "2026-01" },
   ],
-  // Loisirs was reset this month — renders as "Report ignoré".
+  // Loisirs was reset this month — renders as "Report ignoré". Courses is forced
+  // deep enough into the red to END the month negative, which is the case the
+  // repartition screen exists for: without a poste in deficit, neither the
+  // Dashboard nudge nor the apport prefill would ever be exercised.
   carryOverrides: [
     { id: "o1", categoryId: "loisirs", month: M, carryInCents: 0, createdAt: "2026-01-01" },
+    { id: "o2", categoryId: "courses", month: M, carryInCents: -70000, createdAt: "2026-01-01" },
+  ],
+  // Both kinds of movement, so the repartition screen and the poste meta line
+  // have something to render: a report pushed off Courses onto Maison (the less
+  // important poste absorbs it), and the bonus topping Courses back up.
+  budgetMovements: [
+    {
+      id: "mv1",
+      month: M,
+      fromCategoryId: "maison",
+      toCategoryId: "courses",
+      fromIncomeId: null,
+      amountCents: 5000,
+      label: "Report reporté sur Maison",
+      createdAt: `${M}-01T09:00:00.000Z`,
+      deletedAt: null,
+    },
+    {
+      id: "mv2",
+      month: M,
+      fromCategoryId: null,
+      toCategoryId: "essence",
+      fromIncomeId: "i2",
+      amountCents: 8000,
+      label: "Prime",
+      createdAt: `${M}-01T09:05:00.000Z`,
+      deletedAt: null,
+    },
   ],
   expenses: [
     expense("e1", "courses", 4250, "02", "u1", "Marché"),
@@ -138,6 +169,17 @@ export const FIXTURE_DATASET: Dataset = {
       startMonth: null,
       endMonth: null,
       createdAt: "2026-01-01T00:00:00.000Z",
+      deletedAt: null,
+    },
+    // A one-off: same month on both bounds. This is what funds the apport above.
+    {
+      id: "i2",
+      name: "Prime exceptionnelle",
+      amountCents: 80000,
+      description: "Versée une seule fois",
+      startMonth: M,
+      endMonth: M,
+      createdAt: `${M}-01T00:00:00.000Z`,
       deletedAt: null,
     },
   ],

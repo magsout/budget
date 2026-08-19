@@ -88,9 +88,20 @@ confirmées : rien ne touche aux vraies données.
 
 | Collection | Champs |
 |---|---|
-| `users` | `firstName`, `createdAt` |
+| `users` | `firstName`, `createdAt`, `archivedAt?` |
 | `categories` | `name`, `sortOrder`, `color?`, `createdAt`, `archivedAt` |
 | `budgetVersions` | `categoryId`, `amountCents`, `effectiveFrom` (`YYYY-MM`) |
+| `carryOverrides` | `categoryId`, `month`, `carryInCents`, `createdAt` — report forcé à la main (id = `<categoryId>_<month>`) |
+| `budgetMovements` | `month`, `fromCategoryId` (`null` = apport), `toCategoryId`, `fromIncomeId`, `amountCents`, `label`, `createdAt`, `deletedAt` |
 | `expenses` | `categoryId`, `userId`, `amountCents`, `description`, `date` (`YYYY-MM-DD`), `createdAt`, `deletedAt` |
+| `recurringExpenses` | `name`, `amountCents`, `description`, `startMonth`, `endMonth`, `createdAt`, `deletedAt` |
+| `incomes` | idem `recurringExpenses` — un revenu **ponctuel** est une fenêtre d'un seul mois (`startMonth === endMonth`) |
 
 Montants en **centimes entiers**. Mois d'une dépense = `mois(date)`.
+
+Aucun solde n'est stocké : tout est replié depuis le journal à chaque rendu
+(`src/lib/budget.ts`). Le disponible d'un poste sur un mois vaut
+`budget versionné + report + apport + transfert`, et le reste devient le report du
+mois suivant, négatif compris. Un `budgetMovement` est **équilibré par
+construction** — un seul document porte les deux côtés — donc une répartition ne
+peut ni créer ni perdre d'argent.

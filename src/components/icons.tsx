@@ -134,6 +134,19 @@ export function ArrowDownIcon() {
   );
 }
 
+/** Move a report from one poste onto another. */
+export function ShuffleIcon() {
+  return (
+    <svg {...BASE}>
+      <path d="M16 3h5v5" />
+      <path d="M4 20 21 3" />
+      <path d="M21 16v5h-5" />
+      <path d="M15 15l6 6" />
+      <path d="M4 4l5 5" />
+    </svg>
+  );
+}
+
 /** The profile you are currently using. */
 export function CheckIcon() {
   return (

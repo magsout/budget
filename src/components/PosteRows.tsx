@@ -1,6 +1,6 @@
 import { type CategorySummary, spentPercent } from "../lib/budget.ts";
 import { posteColor } from "../lib/colors.ts";
-import { carryLabel, remainingTone } from "../lib/labels.ts";
+import { originLabel, remainingTone } from "../lib/labels.ts";
 import { formatCents, formatCentsPlain } from "../lib/money.ts";
 import { PlusIcon } from "./icons.tsx";
 
@@ -25,7 +25,7 @@ export function PosteRows({ summary, onPick }: Props) {
     <>
       {summary.map(({ category, state }) => {
         const tone = remainingTone(state.remainingCents, state.startingCents);
-        const carry = carryLabel(state);
+        const origin = originLabel(state);
 
         return (
           <button
@@ -43,12 +43,13 @@ export function PosteRows({ summary, onPick }: Props) {
               {category.name}
             </span>
             {/* Bare numbers, no "Dépensé" prefix: the slash already says it, and
-                the prefix was repeated once per poste. `carryLabel` stays as TEXT —
+                the prefix was repeated once per poste. `originLabel` stays as TEXT —
                 it explains a gap between budget and remaining, and a `title` would
-                be unreachable by touch. */}
+                be unreachable by touch. It composes the report AND the movements
+                into one clause so this line never grows a fourth item. */}
             <span className="poste-row__meta muted num">
               {formatCentsPlain(state.spentCents)} / {formatCents(state.startingCents)}
-              {carry ? ` · ${carry}` : ""}
+              {origin ? ` · ${origin}` : ""}
             </span>
             <span className={`poste-row__rem num ${tone}`}>
               {formatCents(state.remainingCents)}

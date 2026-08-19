@@ -2,7 +2,13 @@ import { useState } from "react";
 import { useAuth } from "../../auth/AuthContext.tsx";
 import { Modal } from "../../components/Modal.tsx";
 import { useData } from "../../data/DataContext.tsx";
-import { CheckIcon, ChevronDownIcon, PowerIcon, SettingsIcon } from "../../components/icons.tsx";
+import {
+  CheckIcon,
+  ChevronDownIcon,
+  PowerIcon,
+  SettingsIcon,
+  ShuffleIcon,
+} from "../../components/icons.tsx";
 import { avatarColorFor } from "../../lib/colors.ts";
 import { activeUsers } from "../../lib/users.ts";
 import { useCurrentUser } from "../../user/CurrentUserContext.tsx";
@@ -15,7 +21,13 @@ const initialOf = (name: string) => name.charAt(0).toUpperCase();
  * actions: switch profile, open settings, and sign out. Settings live behind
  * `onOpenConfig` because the parent owns the full-screen Config sub-page.
  */
-export function AccountMenu({ onOpenConfig }: { onOpenConfig: () => void }) {
+export function AccountMenu({
+  onOpenConfig,
+  onOpenRebalance,
+}: {
+  onOpenConfig: () => void;
+  onOpenRebalance: () => void;
+}) {
   const [open, setOpen] = useState(false);
   const { signOut } = useAuth();
   const { dataset } = useData();
@@ -77,6 +89,19 @@ export function AccountMenu({ onOpenConfig }: { onOpenConfig: () => void }) {
           )}
 
           <div className="account-menu__section">
+            <button
+              type="button"
+              className="list-item list-item--btn"
+              onClick={() => {
+                setOpen(false);
+                onOpenRebalance();
+              }}
+            >
+              <span className="account-menu__row-main">
+                <ShuffleIcon />
+                Répartition
+              </span>
+            </button>
             <button
               type="button"
               className="list-item list-item--btn"

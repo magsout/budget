@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
   accountSummary,
+  isOneOffIncome,
+  oneOffIncomesIn,
   activeInMonth,
   categoryBudgetsActiveIn,
   incomesActiveIn,
@@ -67,6 +69,7 @@ function dataset(over: Partial<Dataset> = {}): Dataset {
     categories: [],
     budgetVersions: [],
     carryOverrides: [],
+    budgetMovements: [],
     expenses: [],
     recurringExpenses: [],
     incomes: [],
@@ -136,6 +139,7 @@ describe("accountSummary", () => {
       expenseCents: 123000,
       remainingCents: 177000,
       budgetCents: 0,
+      apportCents: 0,
       remainingAfterBudgetsCents: 177000,
     });
   });
@@ -154,6 +158,7 @@ describe("accountSummary", () => {
       expenseCents: 0,
       remainingCents: 0,
       budgetCents: 0,
+      apportCents: 0,
       remainingAfterBudgetsCents: 0,
     });
   });
@@ -218,5 +223,79 @@ describe("categoryBudgetsActiveIn", () => {
     });
     expect(categoryBudgetsActiveIn(ds, "2026-06")[0].amountCents).toBe(65000);
     expect(categoryBudgetsActiveIn(ds, "2026-07")[0].amountCents).toBe(70000);
+  });
+});
+
+describe("one-off incomes", () => {
+  it("is one-off when the window is a single month", () => {
+    expect(
+      isOneOffIncome(inc("prime", 80000, { startMonth: "2026-09", endMonth: "2026-09" })),
+    ).toBe(true);
+  });
+
+  it("is not one-off when open-ended or spanning months", () => {
+    expect(isOneOffIncome(inc("salaire", 250000, { startMonth: null, endMonth: null }))).toBe(
+      false,
+    );
+    expect(isOneOffIncome(inc("salaire", 250000, { startMonth: "2026-01", endMonth: null }))).toBe(
+      false,
+    );
+    expect(isOneOffIncome(inc("salaire", 250000, { startMonth: null, endMonth: "2026-09" }))).toBe(
+      false,
+    );
+    expect(
+      isOneOffIncome(inc("prime", 80000, { startMonth: "2026-08", endMonth: "2026-09" })),
+    ).toBe(false);
+  });
+
+  it("lists only the one-offs landing in the month", () => {
+    const ds = dataset({
+      incomes: [
+        inc("salaire", 250000, { startMonth: null, endMonth: null }),
+        inc("prime", 80000, { startMonth: "2026-09", endMonth: "2026-09" }),
+        inc("vieille", 50000, { startMonth: "2026-07", endMonth: "2026-07" }),
+      ],
+    });
+    expect(oneOffIncomesIn(ds, "2026-09").map((i) => i.id)).toEqual(["inc-prime"]);
+  });
+});
+
+const apport = (amountCents: number, month: string) => ({
+  id: `ap-${month}-${amountCents}`,
+  month,
+  fromCategoryId: null,
+  toCategoryId: "courses",
+  fromIncomeId: "prime",
+  amountCents,
+  label: null,
+  createdAt: `${month}-01T09:00:00.000Z`,
+  deletedAt: null,
+});
+
+describe("accountSummary deducts apports", () => {
+  const ds = (movements: Dataset["budgetMovements"]) =>
+    dataset({
+      incomes: [inc("salaire", 300000, { startMonth: null, endMonth: null })],
+      budgetMovements: movements,
+    });
+
+  it("counts apports of the month and takes them off the disposable", () => {
+    const summary = accountSummary(ds([apport(80000, "2026-09")]), "2026-09");
+    expect(summary.apportCents).toBe(80000);
+    // The bonus went into the postes, so it is no longer money to spend here.
+    expect(summary.remainingAfterBudgetsCents).toBe(220000);
+  });
+
+  it("ignores apports of other months", () => {
+    expect(accountSummary(ds([apport(80000, "2026-08")]), "2026-09").apportCents).toBe(0);
+  });
+
+  it("ignores transfers between postes — no money entered or left the household", () => {
+    const transfers = [
+      { ...apport(80000, "2026-09"), fromCategoryId: "autres", fromIncomeId: null },
+    ];
+    const summary = accountSummary(ds(transfers), "2026-09");
+    expect(summary.apportCents).toBe(0);
+    expect(summary.remainingAfterBudgetsCents).toBe(300000);
   });
 });

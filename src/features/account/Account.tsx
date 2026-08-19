@@ -6,6 +6,7 @@ import {
   type CategoryBudgetLine,
   categoryBudgetsActiveIn,
   incomesActiveIn,
+  isOneOffIncome,
   recurringExpensesActiveIn,
 } from "../../lib/account.ts";
 import { posteColor } from "../../lib/colors.ts";
@@ -30,8 +31,14 @@ export function Account({ dataset }: { dataset: Dataset }) {
   const incomes = useMemo(() => incomesActiveIn(dataset, month), [dataset, month]);
   const expenses = useMemo(() => recurringExpensesActiveIn(dataset, month), [dataset, month]);
   const budgets = useMemo(() => categoryBudgetsActiveIn(dataset, month), [dataset, month]);
-  const { incomeCents, expenseCents, remainingCents, budgetCents, remainingAfterBudgetsCents } =
-    useMemo(() => accountSummary(dataset, month), [dataset, month]);
+  const {
+    incomeCents,
+    expenseCents,
+    remainingCents,
+    budgetCents,
+    apportCents,
+    remainingAfterBudgetsCents,
+  } = useMemo(() => accountSummary(dataset, month), [dataset, month]);
 
   return (
     <div>
@@ -76,6 +83,15 @@ export function Account({ dataset }: { dataset: Dataset }) {
               color: "var(--text-muted)",
             },
             { key: "budgets", label: "budgets", cents: budgetCents, color: "var(--primary)" },
+            // Money already assigned into the postes. Without this segment the bar
+            // would show a bonus spent plugging holes as income still unspent,
+            // and the two tabs would contradict each other.
+            {
+              key: "apports",
+              label: "apports",
+              cents: apportCents,
+              color: "var(--warning)",
+            },
           ]}
         />
       </div>
@@ -129,7 +145,12 @@ function CashflowSection({
       ) : (
         items.map((it) => (
           <div className="cash-row" key={it.id}>
-            <span className="cash-row__name">{it.name}</span>
+            <span className="cash-row__name">
+              {it.name}
+              {/* Named, so a bonus stops looking like a salary that happens to
+                  stop. This is also what makes it selectable as an apport. */}
+              {isOneOffIncome(it) && <span className="tag">ponctuel</span>}
+            </span>
             {/* The weight of each line, which existed nowhere: "the mortgage is
                 36% of my charges" used to require dividing in your head. */}
             <span className="cash-row__pct num muted">

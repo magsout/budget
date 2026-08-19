@@ -1,5 +1,6 @@
 import { budgetVersionFor, categoriesActiveIn } from "./budget.ts";
 import type { MonthKey } from "./dates.ts";
+import { apportsTotalIn } from "./movements.ts";
 import type { Category, Dataset, Income, RecurringExpense } from "./types.ts";
 
 /**
@@ -46,6 +47,24 @@ export function incomesActiveIn(dataset: Dataset, month: MonthKey): Income[] {
     .toSorted(byAmountDesc);
 }
 
+/**
+ * A one-off income (a bonus, a 13th month) — DERIVED rather than stored: an
+ * Income whose window is a single month already is one, and `activeInMonth`
+ * already scopes it correctly. Deriving it costs no field and no migration, the
+ * same reasoning as `frequentExpenses`.
+ *
+ * The trade-off is that a recurring income that happens to last exactly one
+ * month reads as one-off. In practice they are the same thing.
+ */
+export function isOneOffIncome(income: Income): boolean {
+  return income.startMonth !== null && income.startMonth === income.endMonth;
+}
+
+/** One-off incomes landing in `month` — the pots an apport can be drawn from. */
+export function oneOffIncomesIn(dataset: Dataset, month: MonthKey): Income[] {
+  return incomesActiveIn(dataset, month).filter(isOneOffIncome);
+}
+
 /** A category and the monthly budget it contributes to the cashflow this month. */
 export interface CategoryBudgetLine {
   category: Category;
@@ -78,7 +97,15 @@ export interface AccountSummary {
   remainingCents: number;
   /** Sum of every active category's allocated monthly budget for the month. */
   budgetCents: number;
-  /** income − expense − budget; the true disposable after budgets. */
+  /**
+   * Income assigned into the postes on top of their allocation (lib/movements.ts).
+   * Deducted separately from `budgetCents`: an apport is EXTRA money put in a
+   * poste, not part of its monthly budget, so counting both is not double
+   * counting. Without this, a bonus spent plugging holes would keep reading as
+   * money still available here while the Budget tab knew it was gone.
+   */
+  apportCents: number;
+  /** income − expense − budget − apports; the true disposable. */
   remainingAfterBudgetsCents: number;
 }
 
@@ -93,12 +120,14 @@ export function accountSummary(dataset: Dataset, month: MonthKey): AccountSummar
     (s, l) => s + l.amountCents,
     0,
   );
+  const apportCents = apportsTotalIn(dataset, month);
   const remainingCents = incomeCents - expenseCents;
   return {
     incomeCents,
     expenseCents,
     remainingCents,
     budgetCents,
-    remainingAfterBudgetsCents: remainingCents - budgetCents,
+    apportCents,
+    remainingAfterBudgetsCents: remainingCents - budgetCents - apportCents,
   };
 }

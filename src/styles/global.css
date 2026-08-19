@@ -1534,3 +1534,120 @@ textarea.input {
   flex-direction: column;
   gap: 8px;
 }
+
+/* A card that is also a button: the Dashboard's nudge toward the repartition
+   screen. Built on `.card` rather than a new box so it sits in the same rhythm as
+   the cards above and below it, and reads as part of the page instead of an
+   interstitial. Left border rather than a tinted fill: a full warning wash on a
+   card this size competes with the figures it is trying to send you to. */
+.card--nudge {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  border-left: 3px solid var(--warning);
+}
+
+.card--nudge:hover,
+.card--nudge:active {
+  background: var(--surface-2);
+}
+
+.card--nudge__cta {
+  flex: none;
+  font-weight: 600;
+  color: var(--primary);
+}
+
+/* Inline qualifier on a row's name ("ponctuel"). Sized off the parent so it
+   never out-weighs the name it qualifies. */
+.tag {
+  display: inline-block;
+  margin-left: 6px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  font-size: 0.75em;
+  font-weight: 500;
+  color: var(--text-muted);
+  vertical-align: baseline;
+}
+
+/* Checkbox with its label on one line. The 44px tap target comes from the
+   padding, not from a min-height: the row must not grow when the label wraps. */
+.check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 0;
+  cursor: pointer;
+  color: var(--text-muted);
+}
+
+.check input {
+  width: 18px;
+  height: 18px;
+  accent-color: var(--primary);
+  flex: none;
+}
+
+/* A row of the Répartition screen: poste, the figure it starts from, the field
+   that changes it. A GRID, not a flex row with `margin-left: auto` — with flex,
+   "Maison & jardin" wrapped and dragged the field onto a second line, so the
+   fields no longer lined up and the column could not be read down. The name gets
+   the flexible track and wraps inside it; the other two never move. */
+.mv-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 104px;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.mv-row:last-of-type {
+  border-bottom: 0;
+}
+
+/* Shrinks before the field does: the amount is recoverable from the field, the
+   input is not. */
+.mv-row__from {
+  font-size: 0.875rem;
+  text-align: right;
+}
+
+.mv-row__field {
+  width: 100%;
+  text-align: right;
+}
+
+/* Under ~360px the three tracks stop fitting: the name takes the full first row
+   and the figure/field pair sits beneath it, still aligned right. */
+@media (max-width: 360px) {
+  .mv-row {
+    grid-template-columns: auto 104px;
+  }
+
+  .mv-row .poste__name {
+    grid-column: 1 / -1;
+  }
+}
+
+/* `.poste__name` is a flex box with no `min-width: 0`, so inside a grid track it
+   refuses to shrink below its content and long names ("Maison & jardin") push the
+   figure and the field out of their columns. Scoped to `.mv-row` so the postes
+   list on the Dashboard keeps its own behaviour. */
+.mv-row .poste__name {
+  min-width: 0;
+  font-size: 1rem;
+}
+
+.mv-row .poste__name strong {
+  overflow-wrap: anywhere;
+}
