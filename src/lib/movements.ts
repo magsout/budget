@@ -1,4 +1,5 @@
 import type { MonthKey } from "./dates.ts";
+import { largestRemainder, share } from "./shape.ts";
 import type { BudgetMovement, Dataset } from "./types.ts";
 
 /**
@@ -13,8 +14,6 @@ export interface MovementNet {
   /** Net of report reallocations between postes. Signed: in − out. */
   transferCents: number;
 }
-
-const NONE: MovementNet = { apportCents: 0, transferCents: 0 };
 
 /**
  * Net effect of `month`'s movements on one poste, in a single pass over the
@@ -43,7 +42,7 @@ export function movementNetFor(
     // self-transfer must net to zero rather than double-count as income.
     if (m.fromCategoryId === categoryId) transferCents -= m.amountCents;
   }
-  return apportCents === 0 && transferCents === 0 ? NONE : { apportCents, transferCents };
+  return { apportCents, transferCents };
 }
 
 /** Non-deleted movements of a month, most recent first. */
@@ -69,15 +68,6 @@ export function apportsTotalIn(dataset: Dataset, month: MonthKey): number {
   return total;
 }
 
-/** Months in which any movement touches `categoryId` (either end). */
-export function movementMonthsFor(movements: BudgetMovement[], categoryId: string): MonthKey[] {
-  return movements
-    .filter(
-      (m) => !m.deletedAt && (m.toCategoryId === categoryId || m.fromCategoryId === categoryId),
-    )
-    .map((m) => m.month);
-}
-
 /** One poste as the repartition screen sees it. */
 export interface RepartitionRow {
   categoryId: string;
@@ -88,8 +78,9 @@ export interface RepartitionRow {
 }
 
 /**
- * Propose a redistribution: pull every poste out of the red, drawing from the
- * postes furthest down the list.
+ * Propose a redistribution: pull the postes out of the red, drawing from the
+ * postes furthest down the list. The LAST poste is the exception — it is where the
+ * shortfall is gathered, so it is the one row that can still be negative after.
  *
  * `rows` must arrive in priority order (most important first) — the caller
  * passes them in `sortOrder`, the order the ↑↓ arrows in Réglages already
@@ -99,7 +90,7 @@ export interface RepartitionRow {
  * Conserves the total exactly: it only ever moves what it takes. When the
  * overdrafts outweigh what the lower postes can absorb, the remainder is left on
  * the last poste rather than silently dropped — a proposal that balanced by
- * losing money would be worse than one that admits the hole.
+ * balanced itself by losing money would be worse than one that admits the hole.
  *
  * Generic in the row type so callers keep their own fields (the screen carries a
  * category and the raw field text on each row) without a cast.
@@ -119,13 +110,13 @@ export function proposeRepartition<T extends RepartitionRow>(rows: T[]): T[] {
       out[i].adjustedCents += taken;
       need -= taken;
     }
-    // Nothing left to draw on: the debt stays where it is. Pushing it onto the
-    // last poste anyway would just relabel the same hole.
+    // Nothing left to draw on below: no later row can do better either, so stop
+    // scanning. Whatever is still red is gathered onto the last poste just after.
     if (need > 0) break;
   }
 
-  // Whatever red remains is pushed to the least important poste, which is the
-  // whole point of the gesture: one poste carries the shortfall, not all of them.
+  // Whatever red remains goes to the least important poste. That is the point of
+  // the gesture: ONE poste carries the shortfall instead of all of them sharing it.
   const last = out.length - 1;
   for (let i = 0; i < last; i++) {
     if (out[i].adjustedCents >= 0) continue;
@@ -206,19 +197,36 @@ export function spreadOverShortfalls(
     return needy.map((n) => ({ categoryId: n.categoryId, amountCents: n.shortfallCents }));
   }
 
-  const exact = needy.map((n) => ({
-    categoryId: n.categoryId,
-    raw: (n.shortfallCents * potCents) / total,
-  }));
-  const parts = exact.map((e) => ({ categoryId: e.categoryId, amountCents: Math.floor(e.raw) }));
-  let left = potCents - parts.reduce((s, p) => s + p.amountCents, 0);
-  const byRemainder = exact
-    .map((e, i) => ({ i, rem: e.raw - Math.floor(e.raw) }))
-    .toSorted((a, b) => b.rem - a.rem);
-  for (const { i } of byRemainder) {
-    if (left <= 0) break;
-    parts[i].amountCents += 1;
-    left -= 1;
-  }
-  return parts.filter((p) => p.amountCents > 0);
+  const exact = needy.map((n) => share(n.shortfallCents, total) * potCents);
+  return largestRemainder(exact, potCents)
+    .map((amountCents, i) => ({ categoryId: needy[i].categoryId, amountCents }))
+    .filter((p) => p.amountCents > 0);
+}
+
+/**
+ * The transfers a repartition of `month` replaces: every poste-to-poste movement
+ * of that month. `RepartitionSection` regenerates the whole set from a
+ * movement-free baseline, so re-validating it must retire all of them.
+ */
+export function transfersToReplace(dataset: Dataset, month: MonthKey): BudgetMovement[] {
+  return movementsIn(dataset, month).filter((m) => m.fromCategoryId !== null);
+}
+
+/**
+ * The apports a placement of `incomeId` replaces — that pot's apports for the
+ * month, and ONLY that pot's.
+ *
+ * Scoped by pot, not merely by "is an apport": the screen lets you switch between
+ * one-off incomes, so retiring every apport of the month would make placing a
+ * second bonus silently erase the first one's. That makes `fromIncomeId` part of
+ * the identity of a placement rather than the decoration its doc comment calls it.
+ */
+export function apportsToReplace(
+  dataset: Dataset,
+  month: MonthKey,
+  incomeId: string,
+): BudgetMovement[] {
+  return movementsIn(dataset, month).filter(
+    (m) => m.fromCategoryId === null && m.fromIncomeId === incomeId,
+  );
 }

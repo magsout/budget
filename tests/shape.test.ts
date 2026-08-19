@@ -1,5 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { formatPct, share, stackWidths, sumAmountCents } from "../src/lib/shape.ts";
+import {
+  formatPct,
+  largestRemainder,
+  share,
+  stackWidths,
+  sumAmountCents,
+} from "../src/lib/shape.ts";
 
 describe("sumAmountCents", () => {
   it("is 0 on an empty list", () => {
@@ -115,5 +121,32 @@ describe("stackWidths", () => {
   it("gives a zero segment zero width", () => {
     const { pct } = stackWidths([10000, 0], 10000);
     expect(pct[1]).toBe(0);
+  });
+});
+
+describe("largestRemainder", () => {
+  // The invariant both callers depend on: a bar that closes exactly, and a pot
+  // handed out to the cent. Tested here rather than twice over at each call site.
+  it("hands out exactly the target when the reals sum to it", () => {
+    // How both callers use it: the reals are a split OF the target, so the parts
+    // must add back up to it exactly whatever the rounding.
+    for (const target of [1, 7, 100, 4321, 39_999]) {
+      const exact = [0.5, 0.25, 0.25].map((w) => w * target);
+      const parts = largestRemainder(exact, target);
+      expect(parts.reduce((s, p) => s + p, 0)).toBe(target);
+    }
+  });
+
+  it("gives the spare units to the largest fractional parts", () => {
+    // Floors are [0, 0, 0] and the target is 2, so the two biggest fractions win.
+    expect(largestRemainder([0.9, 0.8, 0.1], 2)).toEqual([1, 1, 0]);
+  });
+
+  it("never hands out more than the target", () => {
+    expect(largestRemainder([0.4, 0.4], 0)).toEqual([0, 0]);
+  });
+
+  it("leaves already-whole reals untouched", () => {
+    expect(largestRemainder([2, 3, 5], 10)).toEqual([2, 3, 5]);
   });
 });

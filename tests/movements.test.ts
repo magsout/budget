@@ -4,10 +4,12 @@ import {
   apportsTotalIn,
   movementNetFor,
   movementsIn,
+  apportsToReplace,
   proposeRepartition,
   repartitionDrift,
   repartitionToMovements,
   spreadOverShortfalls,
+  transfersToReplace,
 } from "../src/lib/movements.ts";
 import type {
   BudgetMovement,
@@ -474,5 +476,38 @@ describe("spreadOverShortfalls", () => {
   it("ignores postes in the black, and an empty or absent pot", () => {
     expect(spreadOverShortfalls([{ categoryId: "a", shortfallCents: -500 }], 10000)).toEqual([]);
     expect(spreadOverShortfalls(needy, 0)).toEqual([]);
+  });
+});
+
+describe("what a re-validation replaces", () => {
+  const ds = dataset({
+    budgetMovements: [
+      apport("courses", "2026-09", 15000, { id: "a-prime", fromIncomeId: "prime" }),
+      apport("essence", "2026-09", 5000, { id: "a-prime2", fromIncomeId: "prime" }),
+      apport("loisirs", "2026-09", 8000, { id: "a-bonus", fromIncomeId: "bonus" }),
+      transfer("autres", "courses", "2026-09", 10000, { id: "t1" }),
+      apport("courses", "2026-08", 9999, { id: "a-old", fromIncomeId: "prime" }),
+      transfer("autres", "courses", "2026-09", 1000, { id: "t-gone", deletedAt: "2026-09-02" }),
+    ],
+  });
+
+  it("scopes apports to their OWN pot, so one bonus cannot erase another's", () => {
+    // The whole reason `fromIncomeId` is part of a placement's identity: placing a
+    // second one-off income must not retire the first one's apports.
+    expect(
+      apportsToReplace(ds, "2026-09", "prime")
+        .map((m) => m.id)
+        .toSorted(),
+    ).toEqual(["a-prime", "a-prime2"]);
+    expect(apportsToReplace(ds, "2026-09", "bonus").map((m) => m.id)).toEqual(["a-bonus"]);
+  });
+
+  it("takes every transfer of the month, since a repartition regenerates them all", () => {
+    expect(transfersToReplace(ds, "2026-09").map((m) => m.id)).toEqual(["t1"]);
+  });
+
+  it("never crosses months or picks up already-retired rows", () => {
+    expect(apportsToReplace(ds, "2026-09", "prime").some((m) => m.month !== "2026-09")).toBe(false);
+    expect(transfersToReplace(ds, "2026-09").some((m) => m.deletedAt)).toBe(false);
   });
 });

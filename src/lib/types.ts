@@ -101,9 +101,10 @@ export interface Income {
  * one doc is the whole movement, and deleting it undoes both sides at once.
  *
  * `fromCategoryId === null` means the money came from OUTSIDE the postes (an
- * apport); that is the only nullable field the fold reads. `fromIncomeId` is
- * attribution only — which one-off income funded the apport, so the Compte tab
- * can show that money as consumed rather than still available.
+ * apport); that is the only nullable field the fold reads. `fromIncomeId` names
+ * the one-off income that funded the apport — the Compte tab shows that money as
+ * consumed rather than still available, and it identifies which placement a doc
+ * belongs to, so re-placing one bonus cannot retire another's apports.
  *
  * Two needs, one shape: redirecting a report from an important poste onto a less
  * important one is the same gesture as topping a poste up from a bonus, the

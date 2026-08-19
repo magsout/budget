@@ -5,7 +5,7 @@ import { PosteRows } from "../../components/PosteRows.tsx";
 import { StackBar } from "../../components/StackBar.tsx";
 import { expensesForMonth, monthSummary, spendByUser, totalRemaining } from "../../lib/budget.ts";
 import { avatarColorFor } from "../../lib/colors.ts";
-import { currentMonth, formatMonth, nextMonth } from "../../lib/dates.ts";
+import { currentMonth, formatMonth, type MonthKey, nextMonth } from "../../lib/dates.ts";
 import { formatCents } from "../../lib/money.ts";
 import { sumAmountCents } from "../../lib/shape.ts";
 import type { Dataset, Expense } from "../../lib/types.ts";
@@ -16,7 +16,13 @@ type FormState =
   | { mode: "edit"; expense: Expense }
   | null;
 
-export function Dashboard({ dataset, onRebalance }: { dataset: Dataset; onRebalance: () => void }) {
+export function Dashboard({
+  dataset,
+  onRebalance,
+}: {
+  dataset: Dataset;
+  onRebalance: (month: MonthKey) => void;
+}) {
   const month = currentMonth();
   const [form, setForm] = useState<FormState>(null);
 
@@ -30,7 +36,8 @@ export function Dashboard({ dataset, onRebalance }: { dataset: Dataset; onRebala
   // time a poste shows a negative carry-in it is already too late to decide where
   // it should have landed. The Dashboard is pinned to the current month, so this
   // is the only place the warning can be raised early.
-  const sinking = useMemo(() => summary.filter((s) => s.state.remainingCents < 0), [summary]);
+  const target = nextMonth(month);
+  const sinking = summary.filter((s) => s.state.remainingCents < 0).length;
 
   return (
     <div className="has-fab">
@@ -59,13 +66,12 @@ export function Dashboard({ dataset, onRebalance }: { dataset: Dataset; onRebala
         )}
       </div>
 
-      {sinking.length > 0 && (
-        <button type="button" className="card card--nudge" onClick={onRebalance}>
+      {sinking > 0 && (
+        <button type="button" className="card card--nudge" onClick={() => onRebalance(target)}>
           <span>
             <strong>
-              {sinking.length === 1
-                ? `1 poste démarrera ${formatMonth(nextMonth(month))} dans le rouge`
-                : `${sinking.length} postes démarreront ${formatMonth(nextMonth(month))} dans le rouge`}
+              {sinking} poste{sinking > 1 ? "s" : ""} démarrer{sinking > 1 ? "ont" : "a"}{" "}
+              {formatMonth(target)} dans le rouge
             </strong>
             <span className="muted">
               {" "}

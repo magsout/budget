@@ -1,19 +1,26 @@
-import { useMemo, useState } from "react";
+import { type ReactNode, useMemo, useState } from "react";
 import { MonthNav } from "../../components/MonthNav.tsx";
 import { useData } from "../../data/DataContext.tsx";
-import { replaceBudgetMovements, softDeleteBudgetMovement } from "../../data/firestore.ts";
+import { softDeleteBudgetMovement, writeBudgetMovements } from "../../data/firestore.ts";
 import { oneOffIncomesIn } from "../../lib/account.ts";
-import { categoriesActiveIn, monthStateFor } from "../../lib/budget.ts";
+import { type CategorySummary, monthSummary } from "../../lib/budget.ts";
 import { posteColor } from "../../lib/colors.ts";
-import { currentMonth, formatMonth, type MonthKey, nextMonth } from "../../lib/dates.ts";
-import { centsToInput, eurosToCents, formatCents, isValidAmount } from "../../lib/money.ts";
+import { formatMonth, type MonthKey } from "../../lib/dates.ts";
 import {
+  centsToInput,
+  eurosToCents,
+  formatCents,
+  isValidAmount,
+  isValidPositiveAmount,
+} from "../../lib/money.ts";
+import {
+  apportsToReplace,
   movementsIn,
   proposeRepartition,
-  type RepartitionRow,
   repartitionDrift,
   repartitionToMovements,
   spreadOverShortfalls,
+  transfersToReplace,
 } from "../../lib/movements.ts";
 import { syncErrorMessage } from "../../lib/sync.ts";
 import type { Category, Dataset } from "../../lib/types.ts";
@@ -24,13 +31,20 @@ import type { Category, Dataset } from "../../lib/types.ts";
  * A sub-page rather than a tab, like Réglages: it owns a « ‹ Retour » and no tab
  * could legitimately read as active here. It carries its own month stepper —
  * unbounded, so September's reports can be sorted out in August, before the month
- * that inherits them begins. That is the whole reason this is not a section of
- * the Dashboard, which is pinned to the current month.
+ * that inherits them begins. That is the whole reason this is not a section of the
+ * Dashboard, which is pinned to the current month.
+ *
+ * `initialMonth` comes from whoever opened the screen, so the Dashboard's nudge
+ * can name a month in its label and be sure this lands on it.
  */
-export function Rebalance({ dataset }: { dataset: Dataset }) {
-  // Defaults to next month: the report you want to redirect is the one about to
-  // land, and the gesture is worth making before it does.
-  const [month, setMonth] = useState<MonthKey>(nextMonth(currentMonth()));
+export function Rebalance({ dataset, initialMonth }: { dataset: Dataset; initialMonth: MonthKey }) {
+  const [month, setMonth] = useState<MonthKey>(initialMonth);
+
+  // One fold for the whole screen. Both sections read the same rows — the reports
+  // to redistribute and the deficits to fill are two fields of one MonthState —
+  // and `monthSummary` is also what DEFINES the priority order the proposal uses,
+  // so taking it from anywhere else would let the two drift apart.
+  const summary = useMemo(() => monthSummary(dataset, month), [dataset, month]);
 
   return (
     <div>
@@ -41,71 +55,101 @@ export function Rebalance({ dataset }: { dataset: Dataset }) {
           choisis seulement qui le porte.
         </p>
       </div>
-      <RepartitionSection dataset={dataset} month={month} />
-      <ApportSection dataset={dataset} month={month} />
+      {/* Keyed by month so stepping the stepper abandons a half-made draft instead
+          of carrying figures onto a month they were not typed for. A `key` does
+          that for free; tracking it inside the state was the same thing by hand,
+          and it only ever covered one of the two sections. */}
+      <RepartitionSection key={`r-${month}`} dataset={dataset} month={month} summary={summary} />
+      <ApportSection key={`a-${month}`} dataset={dataset} month={month} summary={summary} />
       <MovementsSection dataset={dataset} month={month} />
     </div>
   );
 }
 
-interface Draft extends RepartitionRow {
+interface SectionProps {
+  dataset: Dataset;
+  month: MonthKey;
+  summary: CategorySummary[];
+}
+
+/**
+ * A row of either section: poste, the figure it starts from, the field that
+ * changes it. Shared because both rows have to match one CSS contract (the
+ * three-track grid, the `.poste__name` shrink override, the 360px collapse), and
+ * two copies of that markup drift from it independently.
+ */
+function MvRow({
+  category,
+  hint,
+  value,
+  onChange,
+  ariaLabel,
+  inputMode,
+  placeholder,
+}: {
   category: Category;
-  /** Raw field text, so a half-typed "-" or "," is not fought while typing. */
-  input: string;
+  hint: ReactNode;
+  value: string;
+  onChange: (value: string) => void;
+  ariaLabel: string;
+  inputMode: "text" | "decimal";
+  placeholder?: string;
+}) {
+  return (
+    <div className="mv-row">
+      <span className="poste__name">
+        <span className="poste__dot" style={{ background: posteColor(category) }} aria-hidden />
+        <strong>{category.name}</strong>
+      </span>
+      <span className="mv-row__from muted num">{hint}</span>
+      <input
+        className="input mv-row__field"
+        inputMode={inputMode}
+        value={value}
+        placeholder={placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        aria-label={ariaLabel}
+      />
+    </div>
+  );
 }
 
-/** Priority order = the poste order the ↑↓ arrows in Réglages already define. */
-function draftsFor(dataset: Dataset, month: MonthKey): Draft[] {
-  return categoriesActiveIn(dataset, month)
-    .toSorted((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
-    .map((category) => {
-      const carryInCents = monthStateFor(dataset, category.id, month)?.carryInCents ?? 0;
-      return {
-        category,
-        categoryId: category.id,
-        carryInCents,
-        adjustedCents: carryInCents,
-        input: centsToInput(carryInCents),
-      };
-    });
-}
-
-function RepartitionSection({ dataset, month }: { dataset: Dataset; month: MonthKey }) {
+function RepartitionSection({ dataset, month, summary }: SectionProps) {
   const { notifyError } = useData();
-  const base = useMemo(() => draftsFor(dataset, month), [dataset, month]);
-  // Keyed by month so stepping the stepper abandons a half-made draft rather
-  // than carrying figures from one month onto another.
-  const [edits, setEdits] = useState<{ month: MonthKey; rows: Draft[] } | null>(null);
-  const rows = edits?.month === month ? edits.rows : base;
 
-  const setRows = (next: Draft[]) => setEdits({ month, rows: next });
-  const patch = (categoryId: string, input: string) =>
-    setRows(
-      rows.map((r) =>
-        r.categoryId === categoryId
-          ? {
-              ...r,
-              input,
-              adjustedCents: isValidAmount(input) ? eurosToCents(input) : r.adjustedCents,
-            }
-          : r,
-      ),
-    );
+  // The only thing the user owns is one string per poste. Everything else — the
+  // computed report, the parsed value — is derived, so there is no pair of fields
+  // to keep in sync, and a fresh snapshot mid-edit updates the reports the draft
+  // is measured against instead of being silently discarded.
+  const [inputs, setInputs] = useState<Record<string, string>>({});
 
-  const propose = () =>
-    setRows(proposeRepartition(rows).map((r) => ({ ...r, input: centsToInput(r.adjustedCents) })));
+  const rows = summary.map(({ category, state }) => {
+    const carryInCents = state.carryInCents;
+    const input = inputs[category.id] ?? centsToInput(carryInCents);
+    return {
+      category,
+      categoryId: category.id,
+      carryInCents,
+      adjustedCents: isValidAmount(input) ? eurosToCents(input) : carryInCents,
+      input,
+    };
+  });
 
   const drift = repartitionDrift(rows);
   const anyInvalid = rows.some((r) => !isValidAmount(r.input));
-  const touched = rows.some((r) => r.adjustedCents !== r.carryInCents);
+  const changed = rows.some((r) => r.adjustedCents !== r.carryInCents);
+  // Separate from `changed`: a field holding garbage has nothing to save but is
+  // very much something to reset.
+  const edited = Object.keys(inputs).length > 0;
   const totalCents = rows.reduce((s, r) => s + r.carryInCents, 0);
 
   const save = () => {
-    if (drift !== 0 || anyInvalid) return;
-    replaceBudgetMovements(month, "transfer", repartitionToMovements(rows, month)).catch(
-      (err: unknown) => notifyError(syncErrorMessage("répartition du report", err)),
-    );
-    setEdits(null);
+    if (drift !== 0 || anyInvalid || !changed) return;
+    writeBudgetMovements(
+      repartitionToMovements(rows, month),
+      transfersToReplace(dataset, month),
+    ).catch((err: unknown) => notifyError(syncErrorMessage("répartition du report", err)));
+    setInputs({});
   };
 
   if (rows.length === 0) {
@@ -127,26 +171,17 @@ function RepartitionSection({ dataset, month }: { dataset: Dataset; month: Month
       </div>
 
       {rows.map((r) => (
-        <div className="mv-row" key={r.categoryId}>
-          <span className="poste__name">
-            <span
-              className="poste__dot"
-              style={{ background: posteColor(r.category) }}
-              aria-hidden
-            />
-            <strong>{r.category.name}</strong>
-          </span>
-          {/* The computed report stays next to the field: the point of the
-              gesture is seeing what you are moving away from. */}
-          <span className="mv-row__from muted num">{formatCents(r.carryInCents)} →</span>
-          <input
-            className="input mv-row__field"
-            inputMode="text"
-            value={r.input}
-            onChange={(e) => patch(r.categoryId, e.target.value)}
-            aria-label={`Report ajusté de ${r.category.name}`}
-          />
-        </div>
+        <MvRow
+          key={r.categoryId}
+          category={r.category}
+          /* The computed report stays next to the field: the point of the gesture
+             is seeing what you are moving away from. */
+          hint={`${formatCents(r.carryInCents)} →`}
+          value={r.input}
+          onChange={(v) => setInputs((prev) => ({ ...prev, [r.categoryId]: v }))}
+          ariaLabel={`Report ajusté de ${r.category.name}`}
+          inputMode="text"
+        />
       ))}
 
       {anyInvalid ? (
@@ -155,7 +190,7 @@ function RepartitionSection({ dataset, month }: { dataset: Dataset; month: Month
         <p className="muted negative num">
           Écart de {formatCents(drift)} — un transfert ne crée pas d'argent, il en déplace.
         </p>
-      ) : touched ? (
+      ) : changed ? (
         <p className="muted positive">Total conservé.</p>
       ) : (
         <p className="muted">
@@ -168,18 +203,28 @@ function RepartitionSection({ dataset, month }: { dataset: Dataset; month: Month
           type="button"
           className="btn btn--primary btn--sm"
           onClick={save}
-          disabled={drift !== 0 || anyInvalid || !touched}
+          disabled={drift !== 0 || anyInvalid || !changed}
         >
           Enregistrer
         </button>
-        <button type="button" className="btn btn--sm" onClick={propose}>
+        <button
+          type="button"
+          className="btn btn--sm"
+          onClick={() =>
+            setInputs(
+              Object.fromEntries(
+                proposeRepartition(rows).map((r) => [r.categoryId, centsToInput(r.adjustedCents)]),
+              ),
+            )
+          }
+        >
           Proposer
         </button>
         <button
           type="button"
           className="btn btn--sm"
-          onClick={() => setEdits(null)}
-          disabled={!touched}
+          onClick={() => setInputs({})}
+          disabled={!edited}
         >
           Réinitialiser
         </button>
@@ -188,7 +233,7 @@ function RepartitionSection({ dataset, month }: { dataset: Dataset; month: Month
   );
 }
 
-function ApportSection({ dataset, month }: { dataset: Dataset; month: MonthKey }) {
+function ApportSection({ dataset, month, summary }: SectionProps) {
   const { notifyError } = useData();
   const pots = useMemo(() => oneOffIncomesIn(dataset, month), [dataset, month]);
   const [incomeId, setIncomeId] = useState<string>("");
@@ -196,21 +241,48 @@ function ApportSection({ dataset, month }: { dataset: Dataset; month: MonthKey }
 
   const pot = pots.find((p) => p.id === incomeId) ?? pots[0];
 
-  const shortfalls = useMemo(
-    () =>
-      categoriesActiveIn(dataset, month)
-        .map((category) => {
-          const state = monthStateFor(dataset, category.id, month);
-          return {
-            category,
-            categoryId: category.id,
-            shortfallCents: state && state.remainingCents < 0 ? -state.remainingCents : 0,
-          };
-        })
-        .filter((s) => s.shortfallCents > 0)
-        .toSorted((a, b) => b.shortfallCents - a.shortfallCents),
-    [dataset, month],
-  );
+  const shortfalls = summary
+    .filter((s) => s.state.remainingCents < 0)
+    .map(({ category, state }) => ({ category, shortfallCents: -state.remainingCents }))
+    .toSorted((a, b) => b.shortfallCents - a.shortfallCents);
+
+  // Derived from the CURRENT rows, so a figure typed against a month or a poste
+  // that is no longer listed cannot keep the button disabled with no field to fix.
+  const placed = shortfalls.map((r) => {
+    const raw = amounts[r.category.id] ?? "";
+    return {
+      ...r,
+      raw,
+      // An apport adds money, so a negative is not a valid entry here — unlike a
+      // report, which legitimately can be.
+      valid: raw === "" || isValidPositiveAmount(raw),
+      cents: isValidPositiveAmount(raw) ? eurosToCents(raw) : 0,
+    };
+  });
+
+  const placedCents = placed.reduce((s, r) => s + r.cents, 0);
+  const leftCents = (pot?.amountCents ?? 0) - placedCents;
+  const overspent = leftCents < 0;
+  const anyInvalid = placed.some((r) => !r.valid);
+
+  const save = () => {
+    if (!pot || overspent || anyInvalid || placedCents <= 0) return;
+    writeBudgetMovements(
+      placed
+        .filter((r) => r.cents > 0)
+        .map((r) => ({
+          month,
+          fromCategoryId: null,
+          toCategoryId: r.category.id,
+          fromIncomeId: pot.id,
+          amountCents: r.cents,
+          label: pot.name,
+        })),
+      // This pot's apports only — see `apportsToReplace`.
+      apportsToReplace(dataset, month, pot.id),
+    ).catch((err: unknown) => notifyError(syncErrorMessage("apport", err)));
+    setAmounts({});
+  };
 
   if (pots.length === 0) {
     return (
@@ -225,41 +297,6 @@ function ApportSection({ dataset, month }: { dataset: Dataset; month: MonthKey }
       </div>
     );
   }
-
-  const prefill = () => {
-    if (!pot) return;
-    const parts = spreadOverShortfalls(shortfalls, pot.amountCents);
-    setAmounts(Object.fromEntries(parts.map((p) => [p.categoryId, centsToInput(p.amountCents)])));
-  };
-
-  const placedCents = shortfalls.reduce(
-    (s, r) =>
-      s + (isValidAmount(amounts[r.categoryId] ?? "") ? eurosToCents(amounts[r.categoryId]) : 0),
-    0,
-  );
-  const leftCents = (pot?.amountCents ?? 0) - placedCents;
-  const overspent = leftCents < 0;
-  const anyInvalid = Object.values(amounts).some((v) => v !== "" && !isValidAmount(v));
-
-  const save = () => {
-    if (!pot || overspent || anyInvalid || placedCents <= 0) return;
-    const inputs = shortfalls
-      .map((r) => ({
-        month,
-        fromCategoryId: null,
-        toCategoryId: r.categoryId,
-        fromIncomeId: pot.id,
-        amountCents: isValidAmount(amounts[r.categoryId] ?? "")
-          ? eurosToCents(amounts[r.categoryId])
-          : 0,
-        label: pot.name,
-      }))
-      .filter((i) => i.amountCents > 0);
-    replaceBudgetMovements(month, "apport", inputs).catch((err: unknown) =>
-      notifyError(syncErrorMessage("apport", err)),
-    );
-    setAmounts({});
-  };
 
   return (
     <div className="card">
@@ -286,38 +323,29 @@ function ApportSection({ dataset, month }: { dataset: Dataset; month: MonthKey }
         </div>
       )}
 
-      {shortfalls.length === 0 ? (
+      {placed.length === 0 ? (
         <p className="muted">Aucun poste en négatif sur {formatMonth(month)}.</p>
       ) : (
         <>
-          {shortfalls.map((r) => (
-            <div className="mv-row" key={r.categoryId}>
-              <span className="poste__name">
-                <span
-                  className="poste__dot"
-                  style={{ background: posteColor(r.category) }}
-                  aria-hidden
-                />
-                <strong>{r.category.name}</strong>
-              </span>
-              <span className="mv-row__from muted num">manque {formatCents(r.shortfallCents)}</span>
-              <input
-                className="input mv-row__field"
-                inputMode="decimal"
-                value={amounts[r.categoryId] ?? ""}
-                placeholder="0,00"
-                onChange={(e) =>
-                  setAmounts((prev) => ({ ...prev, [r.categoryId]: e.target.value }))
-                }
-                aria-label={`Apport sur ${r.category.name}`}
-              />
-            </div>
+          {placed.map((r) => (
+            <MvRow
+              key={r.category.id}
+              category={r.category}
+              hint={`manque ${formatCents(r.shortfallCents)}`}
+              value={r.raw}
+              onChange={(v) => setAmounts((prev) => ({ ...prev, [r.category.id]: v }))}
+              ariaLabel={`Apport sur ${r.category.name}`}
+              inputMode="decimal"
+              placeholder="0,00"
+            />
           ))}
 
-          <p className={`muted num ${overspent ? "negative" : ""}`}>
-            {overspent
-              ? `${formatCents(-leftCents)} de trop — l'apport ne fait que ${formatCents(pot?.amountCents ?? 0)}.`
-              : `Reste à placer : ${formatCents(leftCents)}`}
+          <p className={`muted num ${overspent || anyInvalid ? "negative" : ""}`}>
+            {anyInvalid
+              ? "Montant invalide (un apport ajoute de l'argent, il ne peut pas être négatif)."
+              : overspent
+                ? `${formatCents(-leftCents)} de trop — l'apport ne fait que ${formatCents(pot?.amountCents ?? 0)}.`
+                : `Reste à placer : ${formatCents(leftCents)}`}
           </p>
 
           <div className="row" style={{ marginTop: 8 }}>
@@ -329,14 +357,30 @@ function ApportSection({ dataset, month }: { dataset: Dataset; month: MonthKey }
             >
               Enregistrer
             </button>
-            <button type="button" className="btn btn--sm" onClick={prefill}>
+            <button
+              type="button"
+              className="btn btn--sm"
+              onClick={() =>
+                setAmounts(
+                  Object.fromEntries(
+                    spreadOverShortfalls(
+                      shortfalls.map((r) => ({
+                        categoryId: r.category.id,
+                        shortfallCents: r.shortfallCents,
+                      })),
+                      pot?.amountCents ?? 0,
+                    ).map((p) => [p.categoryId, centsToInput(p.amountCents)]),
+                  ),
+                )
+              }
+            >
               Répartir au prorata
             </button>
             <button
               type="button"
               className="btn btn--sm"
               onClick={() => setAmounts({})}
-              disabled={placedCents === 0}
+              disabled={Object.keys(amounts).length === 0}
             >
               Vider
             </button>
@@ -355,8 +399,11 @@ function ApportSection({ dataset, month }: { dataset: Dataset; month: MonthKey }
 function MovementsSection({ dataset, month }: { dataset: Dataset; month: MonthKey }) {
   const { notifyError } = useData();
   const movements = useMemo(() => movementsIn(dataset, month), [dataset, month]);
-  const nameOf = (id: string | null) =>
-    dataset.categories.find((c) => c.id === id)?.name ?? "poste supprimé";
+  const names = useMemo(
+    () => new Map(dataset.categories.map((c) => [c.id, c.name])),
+    [dataset.categories],
+  );
+  const nameOf = (id: string | null) => (id && names.get(id)) || "poste supprimé";
 
   if (movements.length === 0) return null;
 

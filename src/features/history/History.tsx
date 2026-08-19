@@ -10,7 +10,7 @@ import {
 } from "../../lib/budget.ts";
 import { posteColor } from "../../lib/colors.ts";
 import { currentMonth, formatMonth, prevMonth } from "../../lib/dates.ts";
-import { carryLabel, remainingTone } from "../../lib/labels.ts";
+import { originLabel, remainingTone } from "../../lib/labels.ts";
 import { formatCents } from "../../lib/money.ts";
 import type { Category, Dataset } from "../../lib/types.ts";
 
@@ -133,7 +133,7 @@ function PosteRow({
           <span>
             Budget {formatCents(state.startingCents)} · dépensé {formatCents(state.spentCents)}
           </span>
-          {carryLabel(state) && <span>{carryLabel(state)}</span>}
+          {originLabel(state) && <span>{originLabel(state)}</span>}
         </div>
       </button>
       {open && <Trend rows={trend} />}

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   accountSummary,
-  isOneOffIncome,
+  isOneOffWindow,
   oneOffIncomesIn,
   activeInMonth,
   categoryBudgetsActiveIn,
@@ -226,25 +226,25 @@ describe("categoryBudgetsActiveIn", () => {
   });
 });
 
-describe("one-off incomes", () => {
+describe("one-off windows", () => {
   it("is one-off when the window is a single month", () => {
     expect(
-      isOneOffIncome(inc("prime", 80000, { startMonth: "2026-09", endMonth: "2026-09" })),
+      isOneOffWindow(inc("prime", 80000, { startMonth: "2026-09", endMonth: "2026-09" })),
     ).toBe(true);
   });
 
   it("is not one-off when open-ended or spanning months", () => {
-    expect(isOneOffIncome(inc("salaire", 250000, { startMonth: null, endMonth: null }))).toBe(
+    expect(isOneOffWindow(inc("salaire", 250000, { startMonth: null, endMonth: null }))).toBe(
       false,
     );
-    expect(isOneOffIncome(inc("salaire", 250000, { startMonth: "2026-01", endMonth: null }))).toBe(
+    expect(isOneOffWindow(inc("salaire", 250000, { startMonth: "2026-01", endMonth: null }))).toBe(
       false,
     );
-    expect(isOneOffIncome(inc("salaire", 250000, { startMonth: null, endMonth: "2026-09" }))).toBe(
+    expect(isOneOffWindow(inc("salaire", 250000, { startMonth: null, endMonth: "2026-09" }))).toBe(
       false,
     );
     expect(
-      isOneOffIncome(inc("prime", 80000, { startMonth: "2026-08", endMonth: "2026-09" })),
+      isOneOffWindow(inc("prime", 80000, { startMonth: "2026-08", endMonth: "2026-09" })),
     ).toBe(false);
   });
 

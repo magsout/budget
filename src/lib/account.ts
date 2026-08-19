@@ -48,21 +48,26 @@ export function incomesActiveIn(dataset: Dataset, month: MonthKey): Income[] {
 }
 
 /**
- * A one-off income (a bonus, a 13th month) — DERIVED rather than stored: an
- * Income whose window is a single month already is one, and `activeInMonth`
- * already scopes it correctly. Deriving it costs no field and no migration, the
- * same reasoning as `frequentExpenses`.
+ * A one-off window (a bonus, a 13th month, a one-time repair) — DERIVED rather
+ * than stored: an item whose window is a single month already IS one-off, and
+ * `activeInMonth` already scopes it correctly. Deriving costs no field and no
+ * migration, the same reasoning as `frequentExpenses`.
  *
- * The trade-off is that a recurring income that happens to last exactly one
- * month reads as one-off. In practice they are the same thing.
+ * Takes a window rather than an `Income` because the Compte tab renders incomes
+ * and recurring expenses through one shared row, and a one-month charge is just
+ * as real as a one-month income. Naming it after incomes would have made that
+ * shared call site read as impossible.
+ *
+ * The trade-off is that a recurring item that happens to last exactly one month
+ * reads as one-off. In practice they are the same thing.
  */
-export function isOneOffIncome(income: Income): boolean {
-  return income.startMonth !== null && income.startMonth === income.endMonth;
+export function isOneOffWindow(item: Pick<Income, "startMonth" | "endMonth">): boolean {
+  return item.startMonth !== null && item.startMonth === item.endMonth;
 }
 
 /** One-off incomes landing in `month` — the pots an apport can be drawn from. */
 export function oneOffIncomesIn(dataset: Dataset, month: MonthKey): Income[] {
-  return incomesActiveIn(dataset, month).filter(isOneOffIncome);
+  return incomesActiveIn(dataset, month).filter(isOneOffWindow);
 }
 
 /** A category and the monthly budget it contributes to the cashflow this month. */

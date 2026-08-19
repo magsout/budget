@@ -409,12 +409,18 @@ body:has(.tabbar__slot) {
   gap: 10px;
 }
 
+/* `min-width: 0` because this is a FLEX box: without it, it refuses to shrink
+   below its content and pushes its neighbours out of place inside any grid track.
+   It lives here rather than on each caller because it is a property of the box, not
+   a per-screen choice — `.cash-row__name` (Compte) already carried its own copy
+   before `.mv-row` (Répartition) needed a second one. */
 .poste__name {
   font-weight: 700;
   font-size: 1.05rem;
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .poste__dot {
@@ -1611,9 +1617,10 @@ textarea.input {
   border-bottom: 1px solid var(--border);
 }
 
-.mv-row:last-of-type {
-  border-bottom: 0;
-}
+/* The last row KEEPS its border: a `:last-of-type` reset was dead here (the rows
+   are followed by a sibling `div.row`, so no `.mv-row` is ever the last `div`), and
+   the rule reads better than the reset did — it separates the rows from the
+   validation line and the buttons underneath. */
 
 /* Shrinks before the field does: the amount is recoverable from the field, the
    input is not. */
@@ -1639,12 +1646,11 @@ textarea.input {
   }
 }
 
-/* `.poste__name` is a flex box with no `min-width: 0`, so inside a grid track it
-   refuses to shrink below its content and long names ("Maison & jardin") push the
-   figure and the field out of their columns. Scoped to `.mv-row` so the postes
-   list on the Dashboard keeps its own behaviour. */
+/* Local presentation only — the shrink fix now lives on `.poste__name` itself. A
+   slightly smaller name here because the row carries two figures beside it, and
+   `anywhere` because this is the one place a name shares its line with a text
+   field, where an unbreakable word would otherwise spill over the input. */
 .mv-row .poste__name {
-  min-width: 0;
   font-size: 1rem;
 }
 

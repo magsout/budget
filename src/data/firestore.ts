@@ -174,43 +174,40 @@ export interface NewMovementInput {
   label?: string | null;
 }
 
-/** Apports come from outside; transfers move a report between two postes. */
-export type MovementKind = "apport" | "transfer";
-
-function kindOf(m: { fromCategoryId: string | null }): MovementKind {
-  return m.fromCategoryId === null ? "apport" : "transfer";
-}
-
 /**
- * Replace a month's movements of one kind with `inputs`, in a SINGLE batch. Two
+ * Write a set of movements, retiring `replacing` in the SAME batch. Two
  * properties come from doing it this way:
  *
  * - The books never pass through an unbalanced state, offline included. A
  *   repartition lands whole or not at all, so no snapshot can ever show money
  *   that left one poste without arriving in another.
- * - Re-validating the screen is idempotent instead of duplicating: the previous
- *   set is retired in the same commit that writes the new one.
+ * - Re-validating a screen is idempotent instead of duplicating: the previous set
+ *   is retired in the same commit that writes the new one.
  *
- * The old set is soft-deleted rather than removed, like expenses — the gesture
- * that patched a hole stays as much a part of the record as the hole itself.
+ * The CALLER passes the docs to retire rather than this function querying for
+ * them by some notion of "kind". That is deliberate: only the caller knows what
+ * its screen re-generates. Scoping the retirement here by apport-vs-transfer
+ * would make a second one-off income silently wipe the first one's apports, since
+ * both are "apports" for the same month. The caller also already holds every
+ * movement in memory (DataContext subscribes to the collection), so deriving the
+ * list locally costs no read and keeps the whole gesture offline-capable.
+ *
+ * Retired docs are soft-deleted, like expenses — the gesture that patched a hole
+ * stays as much a part of the record as the hole itself.
+ *
  * Ids are auto-generated (unlike carry overrides, which are one per
  * category+month): several movements can legitimately target the same poste in
  * the same month, so there is no natural key to derive an id from.
  */
-export async function replaceBudgetMovements(
-  month: MonthKey,
-  kind: MovementKind,
+export async function writeBudgetMovements(
   inputs: NewMovementInput[],
+  replacing: { id: string }[] = [],
 ): Promise<void> {
-  const existing = await getDocs(query(budgetMovementsCol, where("month", "==", month)));
   const batch = writeBatch(db);
   const now = nowIso();
 
-  for (const d of existing.docs) {
-    const row = d.data() as { fromCategoryId: string | null; deletedAt: string | null };
-    if (row.deletedAt) continue;
-    if (kindOf(row) !== kind) continue;
-    batch.update(d.ref, { deletedAt: now });
+  for (const doomed of replacing) {
+    batch.update(doc(budgetMovementsCol, doomed.id), { deletedAt: now });
   }
 
   for (const input of inputs) {

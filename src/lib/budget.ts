@@ -1,5 +1,5 @@
 import { type MonthKey, monthOf, monthRange } from "./dates.ts";
-import { movementMonthsFor, movementNetFor } from "./movements.ts";
+import { movementNetFor } from "./movements.ts";
 import type { BudgetVersion, CarryOverride, Category, Dataset, Expense, User } from "./types.ts";
 
 /** State of one category for one month. */
@@ -106,7 +106,10 @@ export function firstActivityMonth(
   for (const e of dataset.expenses) {
     if (e.categoryId === categoryId && !e.deletedAt) consider(monthOf(e.date));
   }
-  for (const m of movementMonthsFor(dataset.budgetMovements, categoryId)) consider(m);
+  for (const m of dataset.budgetMovements) {
+    if (m.deletedAt) continue;
+    if (m.toCategoryId === categoryId || m.fromCategoryId === categoryId) consider(m.month);
+  }
 
   return earliest ?? fallback;
 }

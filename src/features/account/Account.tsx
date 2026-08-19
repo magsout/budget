@@ -6,7 +6,7 @@ import {
   type CategoryBudgetLine,
   categoryBudgetsActiveIn,
   incomesActiveIn,
-  isOneOffIncome,
+  isOneOffWindow,
   recurringExpensesActiveIn,
 } from "../../lib/account.ts";
 import { posteColor } from "../../lib/colors.ts";
@@ -148,8 +148,9 @@ function CashflowSection({
             <span className="cash-row__name">
               {it.name}
               {/* Named, so a bonus stops looking like a salary that happens to
-                  stop. This is also what makes it selectable as an apport. */}
-              {isOneOffIncome(it) && <span className="tag">ponctuel</span>}
+                  stop — and so does a one-time charge, which this shared row also
+                  renders. (Only the income side feeds the apport picker.) */}
+              {isOneOffWindow(it) && <span className="tag">ponctuel</span>}
             </span>
             {/* The weight of each line, which existed nowhere: "the mortgage is
                 36% of my charges" used to require dividing in your head. */}

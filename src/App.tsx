@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { currentMonth, type MonthKey, nextMonth } from "./lib/dates.ts";
 import { BottomNav, type NavTab } from "./components/BottomNav.tsx";
 import { BudgetIcon, ChevronLeftIcon, CompteIcon, HistoriqueIcon } from "./components/icons.tsx";
 import { useData } from "./data/DataContext.tsx";
@@ -12,6 +13,7 @@ import { InstallBanner } from "./pwa/InstallBanner.tsx";
 import { PullToRefresh } from "./pwa/PullToRefresh.tsx";
 
 type Tab = "dashboard" | "history" | "account";
+type SubPage = "config" | "rebalance" | null;
 
 const TABS: NavTab<Tab>[] = [
   { id: "dashboard", label: "Budget", icon: <BudgetIcon /> },
@@ -21,8 +23,12 @@ const TABS: NavTab<Tab>[] = [
 
 export function App() {
   const [tab, setTab] = useState<Tab>("dashboard");
-  const [configOpen, setConfigOpen] = useState(false);
-  const [rebalanceOpen, setRebalanceOpen] = useState(false);
+  // One enum, not a boolean each: the sub-pages are mutually exclusive, and two
+  // booleans make that an invariant encoded in a ternary's precedence rather than
+  // in the type. `rebalanceMonth` rides along so whoever opens the screen decides
+  // which month it lands on.
+  const [sub, setSub] = useState<SubPage>(null);
+  const [rebalanceMonth, setRebalanceMonth] = useState(currentMonth());
   const { dataset, loading, error, syncing, pendingWrites } = useData();
 
   // Data shown from cache (offline / not yet confirmed) or local writes still
@@ -38,30 +44,36 @@ export function App() {
   /* Réglages and Répartition are sub-pages, not tabs: each owns a « ‹ Retour »
      and no tab could legitimately be marked active while one is open. One
      descriptor rather than a branch per page, so the shell is written once. */
-  const subPage = rebalanceOpen
-    ? {
-        title: "Répartition",
-        content: <Rebalance dataset={dataset} />,
-        close: () => setRebalanceOpen(false),
-      }
-    : configOpen
+  const subPage =
+    sub === "rebalance"
       ? {
-          title: "Réglages",
-          content: <Config dataset={dataset} />,
-          close: () => setConfigOpen(false),
+          title: "Répartition",
+          content: <Rebalance dataset={dataset} initialMonth={rebalanceMonth} />,
         }
-      : null;
+      : sub === "config"
+        ? { title: "Réglages", content: <Config dataset={dataset} /> }
+        : null;
+
+  const openRebalance = (month: MonthKey) => {
+    setRebalanceMonth(month);
+    setSub("rebalance");
+  };
 
   return (
     <PullToRefresh>
       <div className="app">
+        {/* Above the sub-page branch, not inside it: a write that fails from
+            Réglages or Répartition has to be visible on the screen that made it,
+            and this is the app's only render site for `error`. */}
+        {error && <div className="card gate__error">Erreur de synchronisation : {error}</div>}
+
         {subPage ? (
           <>
             <div className="topbar topbar--sub">
               <button
                 type="button"
                 className="btn btn--ghost btn--sm"
-                onClick={subPage.close}
+                onClick={() => setSub(null)}
                 aria-label="Retour"
               >
                 <ChevronLeftIcon />
@@ -78,20 +90,18 @@ export function App() {
               <span className="topbar__title">Budget</span>
               <div className="topbar__actions">
                 <AccountMenu
-                  onOpenConfig={() => setConfigOpen(true)}
-                  onOpenRebalance={() => setRebalanceOpen(true)}
+                  onOpenConfig={() => setSub("config")}
+                  onOpenRebalance={() => openRebalance(nextMonth(currentMonth()))}
                 />
               </div>
             </div>
 
             <InstallBanner />
 
-            {error && <div className="card gate__error">Erreur de synchronisation : {error}</div>}
-
             {loading ? (
               <div className="card empty">Chargement des données…</div>
             ) : tab === "dashboard" ? (
-              <Dashboard dataset={dataset} onRebalance={() => setRebalanceOpen(true)} />
+              <Dashboard dataset={dataset} onRebalance={openRebalance} />
             ) : tab === "history" ? (
               <History dataset={dataset} />
             ) : (

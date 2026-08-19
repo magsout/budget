@@ -6,6 +6,7 @@ import { categoriesActiveIn, frequentExpenses } from "../../lib/budget.ts";
 import { posteColor } from "../../lib/colors.ts";
 import { currentMonth, localToday, prevMonth } from "../../lib/dates.ts";
 import { centsToInput, eurosToCents, formatCents, isValidPositiveAmount } from "../../lib/money.ts";
+import { syncErrorMessage } from "../../lib/sync.ts";
 import type { Dataset, Expense } from "../../lib/types.ts";
 import { activeUsers } from "../../lib/users.ts";
 import { useCurrentUser } from "../../user/CurrentUserContext.tsx";
@@ -102,11 +103,7 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
       date,
     };
     const op = editing ? updateExpense(expense.id, payload) : addExpense(payload);
-    op.catch((err: unknown) =>
-      notifyError(
-        `Échec de synchronisation de la dépense : ${err instanceof Error ? err.message : String(err)}`,
-      ),
-    );
+    op.catch((err: unknown) => notifyError(syncErrorMessage("dépense", err)));
     onClose();
   };
 
@@ -115,9 +112,7 @@ export function ExpenseForm({ dataset, onClose, defaultCategoryId, expense }: Pr
     if (!confirm("Supprimer cette dépense ?")) return;
     setSubmitting(true);
     softDeleteExpense(expense.id).catch((err: unknown) =>
-      notifyError(
-        `Échec de synchronisation de la suppression : ${err instanceof Error ? err.message : String(err)}`,
-      ),
+      notifyError(syncErrorMessage("suppression", err)),
     );
     onClose();
   };

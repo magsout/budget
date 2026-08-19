@@ -16,6 +16,34 @@ export function share(part: number, total: number): number {
   return total === 0 ? 0 : part / total;
 }
 
+/**
+ * Hand out `target` whole units across `exact` reals so the parts sum to EXACTLY
+ * `target`: each part is the floor of its real, then the units lost to flooring go
+ * to the largest fractional parts.
+ *
+ * Shared because two callers guard the same money-conservation invariant with it —
+ * a bar that must close exactly (`stackWidths`) and a pot that must be handed out
+ * to the cent (`spreadOverShortfalls`). Rounding each part on its own leaves a
+ * sliver of track showing, or a cent unspent.
+ *
+ * Only ever ADDS units, so it expects `target >= sum of the floors` — which holds
+ * whenever `exact` is a split of `target`, the way both callers build it. Handed a
+ * smaller target it returns the floors rather than trimming them.
+ */
+export function largestRemainder(exact: number[], target: number): number[] {
+  const parts = exact.map(Math.floor);
+  let remaining = target - parts.reduce((s, f) => s + f, 0);
+  const order = exact
+    .map((value, i) => ({ i, frac: value - Math.floor(value) }))
+    .toSorted((a, b) => b.frac - a.frac);
+  for (const { i } of order) {
+    if (remaining <= 0) break;
+    parts[i] += 1;
+    remaining -= 1;
+  }
+  return parts;
+}
+
 const percentFormatters = new Map<string, Intl.NumberFormat>();
 
 function percentFormatter(locale: string): Intl.NumberFormat {
@@ -65,22 +93,6 @@ export function stackWidths(cents: number[], totalCents: number): StackWidths {
   if (scale <= 0) return { pct: cents.map(() => 0), over: false };
 
   const exact = cents.map((c) => (c / scale) * 100);
-  const floors = exact.map(Math.floor);
-  // How many whole points the flooring gave away; hand them to the segments with
-  // the largest fractional parts.
   const target = sum >= scale ? 100 : Math.floor((sum / scale) * 100);
-  let remaining = target - floors.reduce((s, f) => s + f, 0);
-
-  const order = exact
-    .map((value, i) => ({ i, frac: value - Math.floor(value) }))
-    .toSorted((a, b) => b.frac - a.frac);
-
-  const pct = [...floors];
-  for (const { i } of order) {
-    if (remaining <= 0) break;
-    pct[i] += 1;
-    remaining -= 1;
-  }
-
-  return { pct, over: sum > totalCents };
+  return { pct: largestRemainder(exact, target), over: sum > totalCents };
 }

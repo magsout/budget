@@ -43,22 +43,22 @@ export function remainingTone(remainingCents: number, startingCents: number): To
  * on the repartition screen, whose whole job is to explain it.
  */
 export function originLabel(state: MonthState): string | null {
-  const moved = state.transferCents;
-  const given = state.apportCents;
   const report = carryLabel(state);
+  const given = state.apportCents;
+  const moved = state.transferCents;
+
+  // Two clauses is the ceiling, so the three-way case names the net instead of
+  // enumerating routes. Stated as the literal condition rather than derived from
+  // a length check, which left an unreachable fallback behind.
+  if (report && given !== 0 && moved !== 0) {
+    return `${report} · ajusté de ${formatCents(given + moved)}`;
+  }
 
   const parts: string[] = [];
   if (report) parts.push(report);
   if (given !== 0) parts.push(`apport ${formatCents(given)}`);
-  if (moved !== 0)
+  if (moved !== 0) {
     parts.push(moved > 0 ? `reçu ${formatCents(moved)}` : `cédé ${formatCents(-moved)}`);
-
-  if (parts.length === 0) return null;
-  // Two clauses is the ceiling. Past that, name the net rather than enumerate:
-  // the reader wants to know the budget was adjusted, not by which three routes.
-  if (parts.length > 2) {
-    const net = given + moved;
-    return `${report ?? "Report"} · ajusté de ${formatCents(net)}`;
   }
-  return parts.join(" · ");
+  return parts.length > 0 ? parts.join(" · ") : null;
 }
